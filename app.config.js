@@ -3,8 +3,9 @@
  * 本地不设变量时回落到 app.json 里的占位值，构建仍可跑通模拟器。
  */
 module.exports = ({ config }) => {
-  const bundleId = process.env.VV_BUNDLE_ID || (config.ios && config.ios.bundleIdentifier);
-  const teamId = process.env.VV_TEAM_ID || (config.ios && config.ios.appleTeamId);
+  const bundleId =
+    process.env.VV_BUNDLE_ID || process.env.BUNDLE_ID || (config.ios && config.ios.bundleIdentifier);
+  const teamId = process.env.VV_TEAM_ID || process.env.TEAM_ID || (config.ios && config.ios.appleTeamId);
   return {
     ...config,
     ios: {
@@ -14,7 +15,8 @@ module.exports = ({ config }) => {
     },
     android: {
       ...config.android,
-      package: process.env.VV_BUNDLE_ID || (config.android && config.android.package),
+      package:
+        process.env.VV_BUNDLE_ID || process.env.BUNDLE_ID || (config.android && config.android.package),
     },
   };
 };
