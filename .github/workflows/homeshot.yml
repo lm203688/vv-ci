@@ -110,6 +110,12 @@ jobs:
               for c in n.children { collect(c, t, &out) }
             }
           
+            func count(_ n: XCUIElementSnapshot, _ t: XCUIElement.ElementType) -> Int {
+              var c = (n.elementType == t) ? 1 : 0
+              for ch in n.children { c += count(ch, t) }
+              return c
+            }
+          
             func texts(_ sb: XCUIApplication) -> [String] {
               guard let snap = try? sb.snapshot() else { return [] }
               var out: [String] = []
@@ -125,7 +131,7 @@ jobs:
               collect(snap, .staticText, &tx)
               print("DUMP[\(tag)] buttons=\(btns.count): " + btns.prefix(40).joined(separator: " | "))
               print("DUMP[\(tag)] texts=\(tx.count): " + tx.prefix(30).joined(separator: " | "))
-              print("DUMP[\(tag)] search=\(snap.descendants(matching: .searchField).count) cells=\(snap.descendants(matching: .cell).count)")
+              print("DUMP[\(tag)] search=\(count(snap, .searchField)) cells=\(count(snap, .cell))")
             }
           
             func tapLabel(_ sb: XCUIApplication, _ labels: [String], _ tag: String) -> Bool {
@@ -230,6 +236,7 @@ jobs:
               sleep(2)
             }
           }
+          
           SWIFT
 
           cd "$H" && xcodegen generate
@@ -298,6 +305,7 @@ jobs:
             ${{ runner.temp }}/home_widget*.png
             ${{ runner.temp }}/ui.log
           if-no-files-found: warn
+
 
 
 
