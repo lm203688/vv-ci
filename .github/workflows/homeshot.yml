@@ -290,6 +290,18 @@ jobs:
         if: always()
         run: |
           sleep 3
+          GROUP=$(xcrun simctl get_app_container "$UDID" "$BUNDLE_ID" "$APP_GROUP" 2>/dev/null || true)
+          PL="$GROUP/Library/Preferences/$APP_GROUP.plist"
+          xcrun simctl spawn "$UDID" killall cfprefsd || true
+          sleep 3
+          if [ -f "$PL" ]; then
+            plutil -replace days -integer 12 "$PL" || true
+            plutil -replace car -string "Daily Camry" "$PL" || true
+            plutil -replace label -string "Oil & filter" "$PL" || true
+            plutil -p "$PL" || true
+          fi
+          xcrun simctl spawn "$UDID" killall chronod || true
+          xcrun simctl listapps "$UDID" | grep -i -B3 -E "Preview|Utilities" || true
           xcrun simctl uninstall "$UDID" com.example.vvshot.host || true
           xcrun simctl uninstall "$UDID" com.example.vvshot.host.xctrunner || true
           xcrun simctl uninstall "$UDID" com.example.vvshot.host.uitests.xctrunner || true
