@@ -262,6 +262,13 @@ jobs:
           GROUP=$(xcrun simctl get_app_container "$UDID" "$BUNDLE_ID" "$APP_GROUP" 2>/dev/null || true)
           echo "GROUP=$GROUP"
           [ -n "$GROUP" ] && plutil -p "$GROUP/Library/Preferences/$APP_GROUP.plist" || true
+          PL="$GROUP/Library/Preferences/$APP_GROUP.plist"
+          if [ -f "$PL" ]; then
+            plutil -replace days -integer 12 "$PL" || true
+            plutil -replace car -string "Daily Camry" "$PL" || true
+            plutil -replace label -string "Oil & filter" "$PL" || true
+            plutil -p "$PL" || true
+          fi
           xcrun simctl terminate "$UDID" "$BUNDLE_ID" || true
           sleep 2
 
@@ -283,6 +290,14 @@ jobs:
         if: always()
         run: |
           sleep 3
+          xcrun simctl uninstall "$UDID" com.example.vvshot.host || true
+          xcrun simctl uninstall "$UDID" com.example.vvshot.host.xctrunner || true
+          xcrun simctl uninstall "$UDID" com.example.vvshot.host.uitests.xctrunner || true
+          xcrun simctl uninstall "$UDID" com.apple.Preview || true
+          xcrun simctl uninstall "$UDID" com.apple.Utilities || true
+          xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100 || true
+          xcrun simctl spawn "$UDID" killall SpringBoard || true
+          sleep 12
           xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/home_widget.png" || true
           xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/home_widget_2.png" || true
           ls -la "$RUNNER_TEMP"/*.png || true
@@ -306,6 +321,7 @@ jobs:
             ${{ runner.temp }}/home_widget*.png
             ${{ runner.temp }}/ui.log
           if-no-files-found: warn
+
 
 
 
