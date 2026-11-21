@@ -119,6 +119,10 @@ jobs:
               return false
             }
 
+            override func setUpWithError() throws {
+              continueAfterFailure = true
+            }
+
             func testAddWidget() throws {
               let sb = XCUIApplication(bundleIdentifier: "com.apple.springboard")
               sb.activate()
@@ -177,7 +181,26 @@ jobs:
               if sb.buttons["Done"].exists { sb.buttons["Done"].tap(); sleep(3) }
               XCUIDevice.shared.press(.home)
               sleep(4)
-              dump(sb, "home")
+              dump(sb, "page1")
+
+              func hasWidget() -> Bool {
+                if sb.staticTexts["Next service"].exists { return true }
+                if sb.staticTexts["Daily Camry"].exists { return true }
+                return false
+              }
+
+              var foundPage = 0
+              if hasWidget() { foundPage = 1 }
+              if foundPage == 0 {
+                for i in 1...4 {
+                  sb.swipeLeft()
+                  sleep(3)
+                  dump(sb, "page\(i+1)")
+                  if hasWidget() { foundPage = i + 1; print("WIDGET PAGE \(foundPage)"); break }
+                }
+              } else { print("WIDGET PAGE 1") }
+              print("WIDGETFPAGE=\(foundPage)")
+              sleep(2)
             }
           }
           SWIFT
@@ -247,5 +270,6 @@ jobs:
             ${{ runner.temp }}/home_widget*.png
             ${{ runner.temp }}/ui.log
           if-no-files-found: warn
+
 
 
