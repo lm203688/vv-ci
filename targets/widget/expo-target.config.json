@@ -1,0 +1,13 @@
+{
+  "type": "widget",
+  "name": "VehicleVaultWidget",
+  "displayName": "保养提醒",
+  "deploymentTarget": "17.0",
+  "colors": {
+    "$widgetBackground": "#F7F8F5",
+    "$accent": "#2F6B3C"
+  },
+  "entitlements": {
+    "com.apple.security.application-groups": ["group.com.example.vehiclevault"]
+  }
+}

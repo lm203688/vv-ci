@@ -1,0 +1,112 @@
+name: widget
+
+on:
+  workflow_dispatch:
+
+env:
+  EXPO_PUBLIC_DEMO: '1'
+  BUNDLE_ID: ${{ vars.VV_BUNDLE_ID }}
+  APP_GROUP: ${{ vars.VV_APP_GROUP }}
+
+jobs:
+  widget:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          ls /Applications | grep -i '^Xcode' || true
+
+      - name: Install JS dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Prebuild iOS project
+        run: npx expo prebuild --platform ios --clean --non-interactive
+
+      - name: Inspect generated project
+        run: |
+          set -x
+          grep -c "VehicleVaultWidget" ios/*.xcodeproj/project.pbxproj || true
+          ls -la ios/VehicleVaultWidget || true
+          cd ios && xcodebuild -list -project *.xcodeproj 2>&1 | tail -20
+
+      - name: Build for simulator (signed, so entitlements apply)
+        run: |
+          set -e
+          cd ios
+          WORKSPACE=$(ls -d *.xcworkspace | head -1)
+          SCHEME="${WORKSPACE%.xcworkspace}"
+          xcodebuild build \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGN_IDENTITY="-" 2>&1 | tail -50
+
+      - name: Verify appex and entitlements
+        run: |
+          set -x
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products/Release-iphonesimulator" -maxdepth 1 -name "*.app" | head -1)
+          echo "APP=$APP"
+          ls -la "$APP/PlugIns" || true
+          plutil -p "$APP/PlugIns/VehicleVaultWidget.appex/Info.plist" | head -20
+          echo "--- app entitlements"
+          codesign -d --entitlements :- "$APP" 2>/dev/null || true
+          echo "--- widget entitlements"
+          codesign -d --entitlements :- "$APP/PlugIns/VehicleVaultWidget.appex" 2>/dev/null || true
+
+      - name: Run demo and verify widget data + notifications
+        run: |
+          set -e
+          RT=$(xcrun simctl list runtimes --json | jq -r '[.runtimes[]|select(.isAvailable==true and (.name|startswith("iOS")))]|sort_by(.version|split(".")|map(tonumber))|last|.identifier')
+          DT=$(xcrun simctl list devicetypes --json | jq -r '[.devicetypes[]|select(.name=="iPhone 17 Pro Max")]|first|.identifier')
+          UDID=$(xcrun simctl create VVWidget "$DT" "$RT")
+          echo "UDID=$UDID runtime=$RT"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b || true
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products/Release-iphonesimulator" -maxdepth 1 -name "*.app" | head -1)
+          xcrun simctl install "$UDID" "$APP"
+          DOC=$(xcrun simctl get_app_container "$UDID" "$BUNDLE_ID" data)/Documents
+          xcrun simctl launch "$UDID" "$BUNDLE_ID" || true
+
+          for i in $(seq 1 80); do [ -f "$DOC/step_garage.txt" ] && break; sleep 1; done
+          sleep 8
+          echo "--- permission marker"
+          cat "$DOC"/step_perm*.txt || echo "(no perm marker)"
+          echo "--- group container"
+          GROUP=$(xcrun simctl get_app_container "$UDID" "$BUNDLE_ID" "$APP_GROUP" 2>/dev/null || true)
+          echo "GROUP=$GROUP"
+          if [ -n "$GROUP" ]; then
+            ls -la "$GROUP/Library/Preferences" || true
+            plutil -p "$GROUP/Library/Preferences/$APP_GROUP.plist" || true
+          fi
+
+          for i in $(seq 1 60); do ls "$DOC"/step_notif*.txt >/dev/null 2>&1 && break; sleep 1; done
+          echo "--- markers"; ls "$DOC"
+          echo "--- notif marker"; cat "$DOC"/step_notif*.txt || echo "(no notif marker)"
+          echo "--- sched full"; cat "$DOC"/sched_full.txt || echo "(none)"
+          echo "--- pending marker"; cat "$DOC"/step_pend*.txt || echo "(none)"
+
+          for i in $(seq 1 40); do [ -f "$DOC/step_settings.txt" ] && break; sleep 1; done
+          echo "--- group plist (final read)"
+          if [ -n "$GROUP" ]; then plutil -p "$GROUP/Library/Preferences/$APP_GROUP.plist" || true; fi
+          sleep 2
+          xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/vv_widget_settings.png" || true
+          xcrun simctl shutdown "$UDID" || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vv-widget
+          path: ${{ runner.temp }}/vv_widget_settings.png
+          if-no-files-found: warn

@@ -1,0 +1,142 @@
+name: VehicleVault Simulator Check
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      EXPO_PUBLIC_DEMO: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install JS dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Unit tests
+        run: node --test test/due.test.js || true
+
+      - name: Prebuild iOS project
+        run: npx expo prebuild --platform ios --clean --non-interactive
+
+      - name: Build for simulator
+        run: |
+          set -e
+          cd ios
+          WORKSPACE=$(ls -d *.xcworkspace | head -1)
+          SCHEME="${WORKSPACE%.xcworkspace}"
+          xcodebuild build \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tail -30
+
+      - name: Prepare simulator (warm-up + wipe)
+        run: |
+          set -x
+          RT=$(xcrun simctl list runtimes --json | jq -r '[.runtimes[]|select(.isAvailable==true and (.name|startswith("iOS")))]|sort_by(.version|split(".")|map(tonumber))|last|.identifier')
+          if [ -z "$RT" ] || [ "$RT" = "null" ]; then RT=com.apple.CoreSimulator.SimRuntime.iOS-26-5; fi
+          DT=$(xcrun simctl list devicetypes --json | jq -r '[.devicetypes[]|select(.name|test("^iPhone (1[6-9])"))]|sort_by([.name|capture("iPhone (?<n>[0-9]+)").n|tonumber])|last|.identifier')
+          UDID=$(xcrun simctl create "VVCheck" "$DT" "$RT")
+          echo "$UDID" > "$RUNNER_TEMP/udid.txt"
+          echo "runtime=$RT devicetype=$DT" > "$RUNNER_TEMP/runtime.txt"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b || true
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products/Release-iphonesimulator" -name "*.app" | head -1)
+          xcrun simctl install "$UDID" "$APP"
+          xcrun simctl privacy "$UDID" grant notifications ${{ vars.VV_BUNDLE_ID }} 2>/dev/null || true
+          xcrun simctl status_bar "$UDID" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4 || true
+          echo "=== warm-up launch (console captured live) ==="
+          xcrun simctl launch --terminate-running-process --console "$UDID" ${{ vars.VV_BUNDLE_ID }} 2>&1 | tee "$RUNNER_TEMP/launch.log" &
+          LPID=$!
+          sleep 14
+          echo "=== process check ==="
+          xcrun simctl spawn "$UDID" launchctl list 2>/dev/null | grep -i vehiclevault || echo "NO_PROCESS"
+          xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/diag_warm.png" || true
+          xcrun simctl terminate "$UDID" ${{ vars.VV_BUNDLE_ID }} || true
+          sleep 2
+          kill $LPID 2>/dev/null || true
+          echo "=== unified log ==="
+          xcrun simctl spawn "$UDID" log show --last 2m --level debug --predicate 'process CONTAINS "ehiclevault" OR senderImagePath CONTAINS "ehiclevault" OR eventMessage CONTAINS "ehiclevault"' 2>/dev/null | tail -60 || true
+          echo "=== crash reports ==="
+          ls -lt ~/Library/Logs/DiagnosticReports 2>/dev/null | head -10 || true
+          cp ~/Library/Logs/DiagnosticReports/*.ips "$RUNNER_TEMP/" 2>/dev/null || true
+          mkdir -p "$RUNNER_TEMP/simcrash"
+          cp -R ~/Library/Logs/CoreSimulator/"$UDID"/* "$RUNNER_TEMP/simcrash/" 2>/dev/null || true
+          ls -lt "$RUNNER_TEMP/simcrash" 2>/dev/null | head -5 || true
+          DATA=$(xcrun simctl get_app_container "$UDID" ${{ vars.VV_BUNDLE_ID }} data || true)
+          echo "data=$DATA"
+          rm -rf "$DATA/Library/Application Support"/* || true
+          rm -rf "$DATA/Documents"/* || true
+          sleep 5
+
+      - name: Record flow
+        run: |
+          set -x
+          UDID=$(cat "$RUNNER_TEMP/udid.txt")
+          DOC=$(xcrun simctl get_app_container "$UDID" ${{ vars.VV_BUNDLE_ID }} data)/Documents
+          echo "$DOC" > "$RUNNER_TEMP/doc.txt"
+          xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/shot_00.png" || true
+          xcrun simctl io "$UDID" recordVideo --codec=h264 --force "$RUNNER_TEMP/vv-demo.mp4" &
+          RECPID=$!
+          sleep 2
+          xcrun simctl launch "$UDID" ${{ vars.VV_BUNDLE_ID }} || true
+          shot() {
+            for i in $(seq 1 90); do
+              if [ -f "$DOC/step_$1.txt" ]; then
+                sleep 2
+                xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/shot_$1.png" || true
+                echo "captured $1"
+                return 0
+              fi
+              sleep 1
+            done
+            echo "TIMEOUT waiting $1"
+            xcrun simctl io "$UDID" screenshot "$RUNNER_TEMP/shot_$1-timeout.png" || true
+          }
+          shot ready
+          shot detail
+          shot record
+          shot saved
+          shot garage2
+          shot settings
+          shot probe
+          sleep 3
+          kill -INT $RECPID || true
+          sleep 5
+          ls -l "$RUNNER_TEMP"/vv-demo.mp4 || true
+          echo "--- markers ---"
+          ls -1 "$DOC" | grep step_ || true
+
+      - name: Collect logs
+        if: always()
+        run: |
+          UDID=$(cat "$RUNNER_TEMP/udid.txt" 2>/dev/null || true)
+          if [ -n "$UDID" ]; then
+            xcrun simctl spawn "$UDID" log show --last 3m --predicate 'processImagePath CONTAINS "VehicleVault"' 2>/dev/null | tail -40 || true
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vv-check
+          path: |
+            ${{ runner.temp }}/vv-demo.mp4
+            ${{ runner.temp }}/*.png
+            ${{ runner.temp }}/runtime.txt
+            ${{ runner.temp }}/launch.log
+            ${{ runner.temp }}/*.ips
+            ${{ runner.temp }}/simcrash/**
+          if-no-files-found: warn

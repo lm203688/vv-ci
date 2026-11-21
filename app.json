@@ -1,0 +1,35 @@
+{
+  "name": "VehicleVault",
+  "slug": "vehiclevault",
+  "version": "1.0.0",
+  "orientation": "portrait",
+  "scheme": "vehiclevault",
+  "userInterfaceStyle": "light",
+  "newArchEnabled": true,
+  "icon": "./assets/icon.png",
+  "ios": {
+    "supportsTablet": true,
+    "bundleIdentifier": "com.example.vehiclevault",
+    "buildNumber": "3",
+    "appleTeamId": "",
+    "infoPlist": {
+      "NSCameraUsageDescription": "Take a photo of the dashboard or a service receipt. Photos stay on this device.",
+      "ITSAppUsesNonExemptEncryption": false
+    }
+  },
+  "android": {
+    "package": "com.example.vehiclevault"
+  },
+  "plugins": [
+    "expo-sqlite",
+    "expo-notifications",
+    "expo-secure-store",
+    [
+      "expo-camera",
+      {
+        "cameraPermission": "Take a photo of the dashboard or a service receipt. Photos stay on this device."
+      }
+    ],
+    "./plugins/withWidget.cjs"
+  ]
+}
