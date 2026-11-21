@@ -138,19 +138,39 @@ jobs:
               sleep(4)
               dump(sb, "gallery")
 
-              let search = sb.searchFields.firstMatch
-              if search.exists {
-                search.tap(); search.typeText("Service due"); sleep(3); print("TYPED search")
-              } else if sb.textFields.count > 0 {
-                let tf = sb.textFields.element(boundBy: 0); tf.tap(); tf.typeText("Service due"); sleep(3); print("TYPED textfield")
-              } else { print("NO SEARCH FIELD") }
-              dump(sb, "results")
+              func doSearch(_ term: String) {
+                let s = sb.searchFields.firstMatch
+                if s.exists {
+                  s.tap()
+                  if let v = s.value as? String, !v.isEmpty, v != "Search" { if sb.buttons["Clear text"].exists { sb.buttons["Clear text"].tap(); sleep(1) } }
+                  s.typeText(term); sleep(3); print("TYPED \(term)")
+                } else { print("NO SEARCH FIELD") }
+              }
+              func tapContaining(_ needles: [String]) -> Bool {
+                for n in needles {
+                  for e in sb.buttons.allElementsBoundByIndex where e.label.contains(n) && e.isHittable { e.tap(); print("TAP by button~\(n): \(e.label)"); return true }
+                  for e in sb.cells.allElementsBoundByIndex where e.label.contains(n) && e.isHittable { e.tap(); print("TAP by cell~\(n): \(e.label)"); return true }
+                  for e in sb.staticTexts.allElementsBoundByIndex where e.label.contains(n) && e.isHittable { e.tap(); print("TAP by text~\(n): \(e.label)"); return true }
+                }
+                return false
+              }
 
-              if !tapLabel(sb, ["Service due"], "result") { print("NO RESULT") }
+              var opened = false
+              doSearch("VehicleVault")
+              dump(sb, "byapp")
+              opened = tapContaining(["VehicleVault"])
+              print("OPENED by app: \(opened)")
               sleep(3)
-              dump(sb, "detail")
-
-              if !tapLabel(sb, ["Add Widget", "添加小组件"], "confirm") { print("NO CONFIRM") }
+              dump(sb, "appdetail")
+              if !opened {
+                doSearch("Service")
+                dump(sb, "byservice")
+                opened = tapContaining(["Service", "due"])
+                print("OPENED by service: \(opened)")
+                sleep(3)
+                dump(sb, "servicedetail")
+              }
+              if !tapLabel(sb, ["Add Widget", "添加小组件"], "confirm") { _ = tapContaining(["Add Widget", "添加小组件"]); print("CONFIRM fallback tried") }
               sleep(4)
               dump(sb, "added")
 
@@ -227,4 +247,5 @@ jobs:
             ${{ runner.temp }}/home_widget*.png
             ${{ runner.temp }}/ui.log
           if-no-files-found: warn
+
 
