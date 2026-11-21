@@ -146,17 +146,17 @@ jobs:
           
             func tapContaining(_ sb: XCUIApplication, _ needles: [String]) -> Bool {
               for n in needles {
-                for t in [XCUIElement.ElementType.button, .cell, .staticText] {
-                  let q = sb.descendants(matching: t).matching(NSPredicate(format: "label CONTAINS[c] %@", n))
-                  let c = q.count
-                  if c == 0 { continue }
-                  for i in 0..<min(c, 5) {
-                    let e = q.element(boundBy: i)
-                    if !e.exists { continue }
-                    if e.isHittable { e.tap() } else { e.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
-                    print("TAP by ~\(n): \(e.label)")
-                    return true
-                  }
+                let btns = sb.buttons.allElementsBoundByIndex
+                for e in btns where e.label.contains(n) {
+                  if e.isHittable { e.tap() } else { e.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+                  print("TAP button~\(n): [\(e.label)]")
+                  return true
+                }
+                let cells = sb.cells.allElementsBoundByIndex
+                for e in cells where e.label.contains(n) {
+                  if e.isHittable { e.tap() } else { e.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+                  print("TAP cell~\(n): [\(e.label)]")
+                  return true
                 }
               }
               return false
@@ -236,6 +236,7 @@ jobs:
               sleep(2)
             }
           }
+          
           
           SWIFT
 
