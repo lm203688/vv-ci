@@ -101,22 +101,20 @@ jobs:
           import XCTest
 
           final class HomeShotTests: XCTestCase {
-            func tree(_ sb: XCUIApplication, _ tag: String) {
-              let all = sb.debugDescription
-              print("TREE[\(tag)] count=\(all.count)")
-              print(String(all.prefix(6000)))
+            func dump(_ sb: XCUIApplication, _ tag: String) {
+              let btns = sb.buttons.allElementsBoundByIndex.map { $0.label }
+              print("DUMP[\(tag)] buttons=\(btns.count): " + btns.prefix(40).joined(separator: " | "))
+              let texts = sb.staticTexts.allElementsBoundByIndex.map { $0.label }
+              print("DUMP[\(tag)] texts=\(texts.count): " + texts.prefix(25).joined(separator: " | "))
+              print("DUMP[\(tag)] search=\(sb.searchFields.count) textfields=\(sb.textFields.count) cells=\(sb.cells.count) icons=\(sb.icons.count) others=\(sb.otherElements.count)")
             }
 
-            func tapAny(_ sb: XCUIApplication, _ labels: [String], _ tag: String) -> Bool {
+            func tapLabel(_ sb: XCUIApplication, _ labels: [String], _ tag: String) -> Bool {
               for l in labels {
                 let b = sb.buttons[l]
-                if b.exists && b.isHittable {
-                  b.tap(); print("TAPPED \(tag) button=\(l)"); return true
-                }
+                if b.exists { if b.isHittable { b.tap() } else { b.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }; print("TAP \(tag) button=\(l)"); return true }
                 let t = sb.staticTexts[l]
-                if t.exists && t.isHittable {
-                  t.tap(); print("TAPPED \(tag) text=\(l)"); return true
-                }
+                if t.exists { if t.isHittable { t.tap() } else { t.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }; print("TAP \(tag) text=\(l)"); return true }
               }
               return false
             }
@@ -126,46 +124,40 @@ jobs:
               sb.activate()
               XCTAssertTrue(sb.wait(for: .runningForeground, timeout: 10))
               sleep(4)
-              tree(sb, "idle")
+              dump(sb, "idle")
 
-              // long press an empty part of the home screen to enter jiggle mode
-              sb.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.42)).press(forDuration: 1.6)
+              sb.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.62)).press(forDuration: 1.8)
               sleep(3)
-              tree(sb, "jiggle")
+              dump(sb, "jiggle")
 
-              _ = tapAny(sb, ["Edit", "编辑", "Done", "完成"], "edit")
+              if !tapLabel(sb, ["Edit", "编辑"], "edit") { print("NO EDIT BUTTON") }
               sleep(2)
-              tree(sb, "editmenu")
+              dump(sb, "editmenu")
 
-              _ = tapAny(sb, ["Add Widget", "添加小组件", "Add widget"], "addwidget")
-              sleep(3)
-              tree(sb, "gallery")
+              if !tapLabel(sb, ["Add Widget", "添加小组件", "Add widget"], "addwidget") { print("NO ADD WIDGET") }
+              sleep(4)
+              dump(sb, "gallery")
 
-              // search inside the widget gallery
               let search = sb.searchFields.firstMatch
               if search.exists {
-                search.tap()
-                search.typeText("Service due")
-                sleep(3)
-                print("TYPED search")
+                search.tap(); search.typeText("Service due"); sleep(3); print("TYPED search")
               } else if sb.textFields.count > 0 {
-                let tf = sb.textFields.element(boundBy: 0)
-                tf.tap(); tf.typeText("Service due"); sleep(3)
-                print("TYPED textfield")
-              } else {
-                print("NO SEARCH FIELD")
-              }
-              tree(sb, "results")
+                let tf = sb.textFields.element(boundBy: 0); tf.tap(); tf.typeText("Service due"); sleep(3); print("TYPED textfield")
+              } else { print("NO SEARCH FIELD") }
+              dump(sb, "results")
 
-              // open the widget preview, then add it
-              if tapAny(sb, ["Service due"], "result") { sleep(3); tree(sb, "detail") }
-              _ = tapAny(sb, ["Add Widget", "添加小组件"], "confirm")
+              if !tapLabel(sb, ["Service due"], "result") { print("NO RESULT") }
               sleep(3)
-              tree(sb, "added")
+              dump(sb, "detail")
 
+              if !tapLabel(sb, ["Add Widget", "添加小组件"], "confirm") { print("NO CONFIRM") }
+              sleep(4)
+              dump(sb, "added")
+
+              if sb.buttons["Done"].exists { sb.buttons["Done"].tap(); sleep(3) }
               XCUIDevice.shared.press(.home)
               sleep(4)
-              tree(sb, "home")
+              dump(sb, "home")
             }
           }
           SWIFT
@@ -204,7 +196,9 @@ jobs:
             -scheme VVHomeShot \
             -destination "id=$UDID" \
             -derivedDataPath "$RUNNER_TEMP/hd" \
-            CODE_SIGNING_ALLOWED=NO 2>&1 | grep -Ev '^ *$' | tail -120
+            CODE_SIGNING_ALLOWED=NO > "$RUNNER_TEMP/ui.log" 2>&1 || true
+          echo "--- ui log size: $(wc -l < "$RUNNER_TEMP/ui.log")"
+          grep -E 'DUMP\[|TAP |NO EDIT|NO ADD|NO SEARCH|NO RESULT|NO CONFIRM|TYPED' "$RUNNER_TEMP/ui.log" | tail -60
 
       - name: Capture home screen
         if: always()
@@ -229,5 +223,8 @@ jobs:
         if: always()
         with:
           name: vv-homeshot
-          path: ${{ runner.temp }}/home_widget*.png
+          path: |
+            ${{ runner.temp }}/home_widget*.png
+            ${{ runner.temp }}/ui.log
           if-no-files-found: warn
+
