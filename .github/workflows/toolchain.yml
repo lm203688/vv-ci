@@ -1,0 +1,28 @@
+name: toolchain
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: xcode-27
+    steps:
+      - name: Xcode inventory
+        run: |
+          sw_vers
+          uname -m
+          ls -d /Applications/Xcode*.app || true
+          xcodebuild -version
+          echo "--- selected dev dir: $(xcode-select -p)"
+          xcrun --sdk iphoneos --show-sdk-version
+          xcrun --sdk iphonesimulator --show-sdk-version
+          xcodebuild -showsdks | sed -n '1,40p'
+      - name: Simulator inventory
+        run: |
+          xcrun simctl list runtimes | head -20
+          xcrun simctl list devicetypes | grep -i "iPhone 1" | head -10
+      - name: Node and brew
+        run: |
+          node -v || true
+          npm -v || true
+          brew --version | head -1 || true
