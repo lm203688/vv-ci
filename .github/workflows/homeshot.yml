@@ -99,16 +99,35 @@ jobs:
           SWIFT
           cat > "$H/UITests/HomeShotTests.swift" <<'SWIFT'
           import XCTest
-
+          
           final class HomeShotTests: XCTestCase {
-            func dump(_ sb: XCUIApplication, _ tag: String) {
-              let btns = sb.buttons.allElementsBoundByIndex.map { $0.label }
-              print("DUMP[\(tag)] buttons=\(btns.count): " + btns.prefix(40).joined(separator: " | "))
-              let texts = sb.staticTexts.allElementsBoundByIndex.map { $0.label }
-              print("DUMP[\(tag)] texts=\(texts.count): " + texts.prefix(25).joined(separator: " | "))
-              print("DUMP[\(tag)] search=\(sb.searchFields.count) textfields=\(sb.textFields.count) cells=\(sb.cells.count) icons=\(sb.icons.count) others=\(sb.otherElements.count)")
+            override func setUpWithError() throws {
+              continueAfterFailure = true
             }
-
+          
+            func collect(_ n: XCUIElementSnapshot, _ t: XCUIElement.ElementType, _ out: inout [String]) {
+              if n.elementType == t && !n.label.isEmpty { out.append(n.label) }
+              for c in n.children { collect(c, t, &out) }
+            }
+          
+            func texts(_ sb: XCUIApplication) -> [String] {
+              guard let snap = try? sb.snapshot() else { return [] }
+              var out: [String] = []
+              collect(snap, .staticText, &out)
+              return out
+            }
+          
+            func dump(_ sb: XCUIApplication, _ tag: String) {
+              guard let snap = try? sb.snapshot() else { print("DUMP[\(tag)] NO SNAPSHOT"); return }
+              var btns: [String] = []
+              var tx: [String] = []
+              collect(snap, .button, &btns)
+              collect(snap, .staticText, &tx)
+              print("DUMP[\(tag)] buttons=\(btns.count): " + btns.prefix(40).joined(separator: " | "))
+              print("DUMP[\(tag)] texts=\(tx.count): " + tx.prefix(30).joined(separator: " | "))
+              print("DUMP[\(tag)] search=\(snap.descendants(matching: .searchField).count) cells=\(snap.descendants(matching: .cell).count)")
+            }
+          
             func tapLabel(_ sb: XCUIApplication, _ labels: [String], _ tag: String) -> Bool {
               for l in labels {
                 let b = sb.buttons[l]
@@ -118,92 +137,101 @@ jobs:
               }
               return false
             }
-
-            override func setUpWithError() throws {
-              continueAfterFailure = true
+          
+            func tapContaining(_ sb: XCUIApplication, _ needles: [String]) -> Bool {
+              for n in needles {
+                for t in [XCUIElement.ElementType.button, .cell, .staticText] {
+                  let q = sb.descendants(matching: t).matching(NSPredicate(format: "label CONTAINS[c] %@", n))
+                  let c = q.count
+                  if c == 0 { continue }
+                  for i in 0..<min(c, 5) {
+                    let e = q.element(boundBy: i)
+                    if !e.exists { continue }
+                    if e.isHittable { e.tap() } else { e.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap() }
+                    print("TAP by ~\(n): \(e.label)")
+                    return true
+                  }
+                }
+              }
+              return false
             }
-
+          
+            func hasWidget(_ sb: XCUIApplication) -> Bool {
+              let tx = texts(sb)
+              for t in tx where t.contains("Next service") || t.contains("Daily Camry") || t.contains("days left") { return true }
+              return false
+            }
+          
             func testAddWidget() throws {
               let sb = XCUIApplication(bundleIdentifier: "com.apple.springboard")
               sb.activate()
               XCTAssertTrue(sb.wait(for: .runningForeground, timeout: 10))
               sleep(4)
               dump(sb, "idle")
-
+          
               sb.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.62)).press(forDuration: 1.8)
               sleep(3)
               dump(sb, "jiggle")
-
+          
               if !tapLabel(sb, ["Edit", "编辑"], "edit") { print("NO EDIT BUTTON") }
               sleep(2)
               dump(sb, "editmenu")
-
+          
               if !tapLabel(sb, ["Add Widget", "添加小组件", "Add widget"], "addwidget") { print("NO ADD WIDGET") }
               sleep(4)
               dump(sb, "gallery")
-
-              func doSearch(_ term: String) {
-                let s = sb.searchFields.firstMatch
-                if s.exists {
-                  s.tap()
-                  if let v = s.value as? String, !v.isEmpty, v != "Search" { if sb.buttons["Clear text"].exists { sb.buttons["Clear text"].tap(); sleep(1) } }
-                  s.typeText(term); sleep(3); print("TYPED \(term)")
-                } else { print("NO SEARCH FIELD") }
-              }
-              func tapContaining(_ needles: [String]) -> Bool {
-                for n in needles {
-                  for e in sb.buttons.allElementsBoundByIndex where e.label.contains(n) && e.isHittable { e.tap(); print("TAP by button~\(n): \(e.label)"); return true }
-                  for e in sb.cells.allElementsBoundByIndex where e.label.contains(n) && e.isHittable { e.tap(); print("TAP by cell~\(n): \(e.label)"); return true }
-                  for e in sb.staticTexts.allElementsBoundByIndex where e.label.contains(n) && e.isHittable { e.tap(); print("TAP by text~\(n): \(e.label)"); return true }
-                }
-                return false
-              }
-
-              var opened = false
-              doSearch("VehicleVault")
+          
+              let search = sb.searchFields.firstMatch
+              if search.exists {
+                search.tap()
+                search.typeText("VehicleVault")
+                sleep(3)
+                print("TYPED VehicleVault")
+              } else { print("NO SEARCH FIELD") }
               dump(sb, "byapp")
-              opened = tapContaining(["VehicleVault"])
+          
+              var opened = tapContaining(sb, ["VehicleVault"])
               print("OPENED by app: \(opened)")
               sleep(3)
               dump(sb, "appdetail")
+          
               if !opened {
-                doSearch("Service")
+                if search.exists { search.tap(); for _ in 0..<12 { search.typeText(XCUIKeyboardKey.delete.rawValue) }; search.typeText("Service"); sleep(3) }
                 dump(sb, "byservice")
-                opened = tapContaining(["Service", "due"])
+                opened = tapContaining(sb, ["Service", "Next service"])
                 print("OPENED by service: \(opened)")
                 sleep(3)
                 dump(sb, "servicedetail")
               }
-              if !tapLabel(sb, ["Add Widget", "添加小组件"], "confirm") { _ = tapContaining(["Add Widget", "添加小组件"]); print("CONFIRM fallback tried") }
+          
+              if !tapLabel(sb, ["Add Widget", "添加小组件"], "confirm") {
+                print("CONFIRM fallback")
+                _ = tapContaining(sb, ["Add Widget"])
+              }
               sleep(4)
               dump(sb, "added")
-
+          
               if sb.buttons["Done"].exists { sb.buttons["Done"].tap(); sleep(3) }
-              XCUIDevice.shared.press(.home)
+              sb.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.97)).tap()
               sleep(4)
               dump(sb, "page1")
-
-              func hasWidget() -> Bool {
-                if sb.staticTexts["Next service"].exists { return true }
-                if sb.staticTexts["Daily Camry"].exists { return true }
-                return false
-              }
-
+          
               var foundPage = 0
-              if hasWidget() { foundPage = 1 }
+              if hasWidget(sb) { foundPage = 1; print("WIDGET PAGE 1") }
               if foundPage == 0 {
                 for i in 1...4 {
                   sb.swipeLeft()
                   sleep(3)
                   dump(sb, "page\(i+1)")
-                  if hasWidget() { foundPage = i + 1; print("WIDGET PAGE \(foundPage)"); break }
+                  if hasWidget(sb) { foundPage = i + 1; print("WIDGET PAGE \(foundPage)"); break }
                 }
-              } else { print("WIDGET PAGE 1") }
+              }
               print("WIDGETFPAGE=\(foundPage)")
               sleep(2)
             }
           }
           SWIFT
+
           cd "$H" && xcodegen generate
           ls -la "$H"
 
@@ -270,6 +298,7 @@ jobs:
             ${{ runner.temp }}/home_widget*.png
             ${{ runner.temp }}/ui.log
           if-no-files-found: warn
+
 
 
 
