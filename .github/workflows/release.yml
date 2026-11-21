@@ -15,10 +15,17 @@ env:
 
 jobs:
   archive:
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          xcrun --sdk iphonesimulator --show-sdk-version
+          sw_vers
 
       - uses: actions/setup-node@v4
         with:
