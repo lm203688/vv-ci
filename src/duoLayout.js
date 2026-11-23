@@ -10,10 +10,12 @@ export const TWO_PANE_MIN = 640; // Duo inner display (669pt): list + detail sid
 export const XL_MIN = 980; // three card columns
 
 // iOS 27.1 on Duo: the status bar moves to the right edge as a vertical capsule, so any
-// Duo-shaped window keeps a right gutter (measured 46pt to clear the capsule) and a small
-// top inset instead of the usual 58pt phone inset.
+// Duo-shaped window keeps a right gutter and a small top inset instead of the usual 58pt
+// phone inset. The capsule's inner edge sits ~65pt from the right edge on the outer
+// display (466pt wide) and its width grows with the clock string, so 60pt plus the app's
+// own 18-20pt padding keeps every text column clear of it.
 export const WIDE_RIGHT_GUTTER = 34;
-export const DUO_RIGHT_GUTTER = 46; // covers both panels: outer capsule + inner vertical bar
+export const DUO_RIGHT_GUTTER = 60; // clears the right-edge capsule on both Duo panels
 export const WIDE_TOP_INSET = 24;
 export const DUO_TOP_INSET = 20;
 export const COMPACT_TOP_INSET = 58;
