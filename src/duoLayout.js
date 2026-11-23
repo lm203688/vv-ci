@@ -1,11 +1,12 @@
 // Duo / wide-screen layout primitives (pure, no React, no RN) — shared by all AppGallery apps.
 // Testable with `node --test duoLayout.test.mjs`.
 
-// Widths are measured in points (portrait). iPhone Duo inner display ≈ 540pt wide,
-// outer ≈ 380pt; iPad 768/834; landscape phones 800-1000.
+// Measured on the iOS 27.1 iPhone Duo simulator (simctl display list):
+//   inner display 2007x2853 px @3x -> 669 x 951 pt
+//   outer display 1398x2034 px @3x -> 466 x 678 pt
 export const COMPACT_MAX = 519; // single column phone layout (Duo outer display)
 export const WIDE_MIN = 520; // Duo inner display / landscape phone / iPad: fill the display
-export const TWO_PANE_MIN = 700; // iPad, expanded windows: list + detail side by side
+export const TWO_PANE_MIN = 640; // Duo inner display (669pt): list + detail side by side
 export const XL_MIN = 980; // three card columns
 
 // iOS 27.1 on Duo: the status bar becomes a vertical bar on the right edge, so wide
