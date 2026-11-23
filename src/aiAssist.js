@@ -172,7 +172,7 @@ export default function AiAssist(props) {
 const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
-    left: 16,
+    right: 12,
     height: 44,
     minWidth: 44,
     paddingHorizontal: 14,
