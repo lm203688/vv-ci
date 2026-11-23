@@ -23,6 +23,10 @@ export const MAX_CONTENT_WIDTH = 1180;
 // A normal iPhone portrait is ~2.17 h/w; Duo outer 678/466 = 1.46, inner 951/669 = 1.42.
 export const DUO_ASPECT_MAX = 1.8;
 export const DUO_MIN_WIDTH = 380;
+// Caps the Duo detection: 669pt inner panel and 466pt outer panel qualify, an 11" iPad in
+// portrait (834x1194, ratio 1.43) must not, or a tablet would lose 60pt to a capsule it
+// does not have. (VehicleVault ships supportsTablet:true, so this bound is load-bearing.)
+export const DUO_MAX_WIDTH = 720;
 
 export function layoutForSize(width, height) {
   const w = Number.isFinite(width) && width > 0 ? width : 390;
@@ -34,7 +38,7 @@ export function layoutForSize(width, height) {
   const leftRatio = extraWide ? 0.36 : 0.4;
   const left = twoPane ? Math.min(520, Math.max(300, Math.round(w * leftRatio))) : 0;
   // Duo-shaped window (much squatter than a phone): its status capsule eats the right edge.
-  const duoShaped = w >= DUO_MIN_WIDTH && h / w <= DUO_ASPECT_MAX;
+  const duoShaped = w >= DUO_MIN_WIDTH && w <= DUO_MAX_WIDTH && h / w <= DUO_ASPECT_MAX;
   return {
     width: w,
     height: h,
