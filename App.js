@@ -17,6 +17,7 @@ import { getAiConfig, saveAiConfig, clearAiConfig } from './src/secrets';
 import { syncWidget } from './src/widget';
 import { isDemo, runDemo } from './src/demo';
 import FeedbackModal from './src/FeedbackModal';
+import { useDuo } from './src/duo';
 
 const Stack = createNativeStackNavigator();
 
@@ -636,6 +637,15 @@ function SettingsScreen() {
 }
 
 export default function App() {
+  const duo = useDuo();
+  return (
+    <View style={{ flex: 1, backgroundColor: 'transparent', paddingRight: duo.gutter }}>
+      <AppScreens />
+    </View>
+  );
+}
+
+function AppScreens() {
   const { c, t } = useUi();
   const navRef = useNavigationContainerRef();
 
