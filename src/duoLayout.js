@@ -23,10 +23,26 @@ export const MAX_CONTENT_WIDTH = 1180;
 // A normal iPhone portrait is ~2.17 h/w; Duo outer 678/466 = 1.46, inner 951/669 = 1.42.
 export const DUO_ASPECT_MAX = 1.8;
 export const DUO_MIN_WIDTH = 380;
-// Caps the Duo detection: 669pt inner panel and 466pt outer panel qualify, an 11" iPad in
-// portrait (834x1194, ratio 1.43) must not, or a tablet would lose 60pt to a capsule it
-// does not have. (VehicleVault ships supportsTablet:true, so this bound is load-bearing.)
-export const DUO_MAX_WIDTH = 720;
+// Duo has two panels, and they are nothing alike in aspect:
+//   outer (closed) 466 x 678  -> portrait-ish, w <= 720, tall side <= 800
+//   inner (open)   951 x 669  -> landscape, w >= 900, tall side <= 760
+// Both carry the right-edge status capsule, so both keep the gutter. Tablet widths start at
+// 1133pt (iPad mini landscape) / 820pt portrait, and tablet portrait is 1.4-1.5 h/w like the
+// outer panel — the EXCLUDED_MAX_WIDTH bound plus the height caps keep iPads out. (VehicleVault
+// ships supportsTablet:true, so these bounds are load-bearing.)
+export const DUO_MAX_WIDTH = 720; // outer panel: portrait-ish, capped below tablet portrait
+export const DUO_INNER_MIN_WIDTH = 900; // inner panel: landscape, above tablet portrait
+export const DUO_INNER_MAX_WIDTH = 1020; // below iPad mini landscape (1133pt)
+export const DUO_OUTER_MAX_HEIGHT = 800; // 678pt actual; iPad portrait is 1080-1194
+export const DUO_INNER_MAX_HEIGHT = 760; // 669pt actual
+// The inner panel is squarer than a phone on its side: 669/951 = 0.70 h/w, while a rotated
+// iPhone 440x956 sits at 0.46, so the aspect band is what separates the two.
+export const DUO_INNER_ASPECT_MIN = 0.55;
+export const DUO_INNER_ASPECT_MAX = 0.85;
+
+// Measured on the inner panel: the capsule's panel eats the rightmost ~78pt, so the wider
+// panel needs a wider gutter than the 466pt outer one.
+export const DUO_INNER_RIGHT_GUTTER = 80;
 
 export function layoutForSize(width, height) {
   const w = Number.isFinite(width) && width > 0 ? width : 390;
@@ -38,7 +54,11 @@ export function layoutForSize(width, height) {
   const leftRatio = extraWide ? 0.36 : 0.4;
   const left = twoPane ? Math.min(520, Math.max(300, Math.round(w * leftRatio))) : 0;
   // Duo-shaped window (much squatter than a phone): its status capsule eats the right edge.
-  const duoShaped = w >= DUO_MIN_WIDTH && w <= DUO_MAX_WIDTH && h / w <= DUO_ASPECT_MAX;
+  const duoOuter = w >= DUO_MIN_WIDTH && w <= DUO_MAX_WIDTH && h / w <= DUO_ASPECT_MAX && h <= DUO_OUTER_MAX_HEIGHT;
+  const duoInner = w >= DUO_INNER_MIN_WIDTH && w <= DUO_INNER_MAX_WIDTH && h <= DUO_INNER_MAX_HEIGHT &&
+    h / w >= DUO_INNER_ASPECT_MIN && h / w <= DUO_INNER_ASPECT_MAX;
+  const duoShaped = duoOuter || duoInner;
+  const duoGutter = duoInner ? DUO_INNER_RIGHT_GUTTER : DUO_RIGHT_GUTTER;
   return {
     width: w,
     height: h,
@@ -46,11 +66,12 @@ export function layoutForSize(width, height) {
     twoPane: twoPane,
     extraWide: extraWide,
     duoShaped: duoShaped,
+    duoInner: duoInner,
     mode: twoPane ? 'split' : 'stack',
     columns: columns,
     left: left,
     right: twoPane ? Math.max(0, w - left) : 0,
-    gutter: duoShaped ? DUO_RIGHT_GUTTER : wide ? WIDE_RIGHT_GUTTER : 0,
+    gutter: duoShaped ? duoGutter : wide ? WIDE_RIGHT_GUTTER : 0,
     topInset: duoShaped ? DUO_TOP_INSET : wide ? WIDE_TOP_INSET : COMPACT_TOP_INSET,
     contentMaxWidth: Math.min(MAX_CONTENT_WIDTH, w),
   };
