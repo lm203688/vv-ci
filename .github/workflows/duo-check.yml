@@ -36,7 +36,7 @@ jobs:
           open -a Simulator --args -CurrentDeviceUDID "$UDID" || true
           sleep 25
 
-      - name: Build for simulator
+      - name: Build for simulator (Release = JS bundled, no Metro needed)
         run: |
           set -o pipefail
           cd ios
@@ -45,7 +45,7 @@ jobs:
           xcodebuild build \
             -workspace "$WORKSPACE" \
             -scheme "$SCHEME" \
-            -configuration Debug \
+            -configuration Release \
             -sdk iphonesimulator \
             -destination "platform=iOS Simulator,id=$UDID" \
             -derivedDataPath "$RUNNER_TEMP/dd" \
@@ -55,7 +55,7 @@ jobs:
       - name: Install and launch on Duo
         run: |
           set -x
-          APP=$(find "$RUNNER_TEMP/dd/Build/Products" -maxdepth 2 -name "*.app" | head -1)
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products/Release-iphonesimulator" -maxdepth 1 -name "*.app" | head -1)
           echo "APP=$APP"
           xcrun simctl install "$UDID" "$APP"
           (xcrun simctl launch --console-pty "$UDID" "$BUNDLE_ID" > "$RUNNER_TEMP/app.log" 2>&1 &)
@@ -72,7 +72,7 @@ jobs:
               xcrun simctl io "$UDID" screenshot --display=$d "out/duo-display$d.png" && break || sleep 4
             done
           done
-          grep -a "\[duo\]" "$RUNNER_TEMP/app.log" | tail -5 || true
+          grep -aF "[duo]" "$RUNNER_TEMP/app.log" | tail -5 || true
           ls -l out || true
           for f in out/*.png; do sips -g pixelWidth -g pixelHeight "$f" || true; done
 
