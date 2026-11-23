@@ -142,6 +142,12 @@ jobs:
           APP=$(find "$RUNNER_TEMP/ipa-x/Payload" -maxdepth 1 -name "*.app" | head -1)
           echo "app=$APP"
           plutil -p "$APP/Info.plist" | grep -Ei 'CFBundleVersion|CFBundleShortVersionString' || true
+          echo "== UIScene gate =="
+          plutil -p "$APP/Info.plist" > "$RUNNER_TEMP/plist.txt"
+          grep -n "UIApplicationSceneManifest" "$RUNNER_TEMP/plist.txt" || { echo "FAIL: no scene manifest in signed ipa"; exit 1; }
+          sed -n '/UIApplicationSceneManifest/,+12p' "$RUNNER_TEMP/plist.txt"
+          grep -n "class SceneDelegate" ios/*/AppDelegate.swift || { echo "FAIL: SceneDelegate missing"; exit 1; }
+          echo "OK: signed ipa adopts UIScene lifecycle"
           plutil -p "$APP/PlugIns/VehicleVaultWidget.appex/Info.plist" | grep -Ei 'CFBundleIdentifier|CFBundleVersion|NSExtensionPointIdentifier' || true
           codesign -d --entitlements :- "$APP" 2>/dev/null | grep -A3 'application-groups' || true
           codesign -d --entitlements :- "$APP/PlugIns/VehicleVaultWidget.appex" 2>/dev/null | grep -A3 'application-groups' || true
