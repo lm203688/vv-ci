@@ -9,12 +9,18 @@ export const WIDE_MIN = 520; // Duo inner display / landscape phone / iPad: fill
 export const TWO_PANE_MIN = 640; // Duo inner display (669pt): list + detail side by side
 export const XL_MIN = 980; // three card columns
 
-// iOS 27.1 on Duo: the status bar becomes a vertical bar on the right edge, so wide
-// layouts keep a right gutter and a much smaller top inset than a phone.
+// iOS 27.1 on Duo: the status bar moves to the right edge as a vertical capsule, so any
+// Duo-shaped window keeps a right gutter (measured 46pt to clear the capsule) and a small
+// top inset instead of the usual 58pt phone inset.
 export const WIDE_RIGHT_GUTTER = 34;
+export const DUO_RIGHT_GUTTER = 46; // covers both panels: outer capsule + inner vertical bar
 export const WIDE_TOP_INSET = 24;
+export const DUO_TOP_INSET = 20;
 export const COMPACT_TOP_INSET = 58;
 export const MAX_CONTENT_WIDTH = 1180;
+// A normal iPhone portrait is ~2.17 h/w; Duo outer 678/466 = 1.46, inner 951/669 = 1.42.
+export const DUO_ASPECT_MAX = 1.8;
+export const DUO_MIN_WIDTH = 380;
 
 export function layoutForSize(width, height) {
   const w = Number.isFinite(width) && width > 0 ? width : 390;
@@ -25,18 +31,21 @@ export function layoutForSize(width, height) {
   const columns = extraWide ? 3 : w >= 560 ? 2 : 1;
   const leftRatio = extraWide ? 0.36 : 0.4;
   const left = twoPane ? Math.min(520, Math.max(300, Math.round(w * leftRatio))) : 0;
+  // Duo-shaped window (much squatter than a phone): its status capsule eats the right edge.
+  const duoShaped = w >= DUO_MIN_WIDTH && h / w <= DUO_ASPECT_MAX;
   return {
     width: w,
     height: h,
     wide: wide,
     twoPane: twoPane,
     extraWide: extraWide,
+    duoShaped: duoShaped,
     mode: twoPane ? 'split' : 'stack',
     columns: columns,
     left: left,
     right: twoPane ? Math.max(0, w - left) : 0,
-    gutter: wide ? WIDE_RIGHT_GUTTER : 0,
-    topInset: wide ? WIDE_TOP_INSET : COMPACT_TOP_INSET,
+    gutter: duoShaped ? DUO_RIGHT_GUTTER : wide ? WIDE_RIGHT_GUTTER : 0,
+    topInset: duoShaped ? DUO_TOP_INSET : wide ? WIDE_TOP_INSET : COMPACT_TOP_INSET,
     contentMaxWidth: Math.min(MAX_CONTENT_WIDTH, w),
   };
 }
