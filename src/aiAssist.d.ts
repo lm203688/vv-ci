@@ -7,4 +7,5 @@ export default function AiAssist(props: {
   app?: string;
   hint?: string;
   gutter?: number;
+  bottom?: number;
 }): React.ReactElement;
