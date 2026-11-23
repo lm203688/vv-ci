@@ -30,4 +30,5 @@ export const DUO_TOP_INSET: number;
 export const COMPACT_TOP_INSET: number;
 export const DUO_ASPECT_MAX: number;
 export const DUO_MIN_WIDTH: number;
+export const DUO_MAX_WIDTH: number;
 export const MAX_CONTENT_WIDTH: number;
