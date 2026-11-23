@@ -1,7 +1,7 @@
 {
   "name": "VehicleVault",
   "slug": "vehiclevault",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "orientation": "portrait",
   "scheme": "vehiclevault",
   "userInterfaceStyle": "light",
@@ -10,7 +10,7 @@
   "ios": {
     "supportsTablet": true,
     "bundleIdentifier": "com.example.vehiclevault",
-    "buildNumber": "6",
+    "buildNumber": "7",
     "appleTeamId": "",
     "infoPlist": {
       "NSCameraUsageDescription": "Take a photo of the dashboard or a service receipt. Photos stay on this device.",
