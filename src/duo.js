@@ -5,7 +5,12 @@ import { layoutForSize } from './duoLayout.js';
 // Hook: derive the Duo/wide layout from the live window size.
 export function useDuoLayout() {
   const dims = useWindowDimensions();
-  return useMemo(() => layoutForSize(dims.width, dims.height), [dims.width, dims.height]);
+  const layout = useMemo(() => layoutForSize(dims.width, dims.height), [dims.width, dims.height]);
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    // Debug breadcrumb for simulator verification runs (`simctl launch --console-pty`).
+    console.log('[duo]', dims.width, dims.height, layout.mode, layout.columns);
+  }
+  return layout;
 }
 
 // Screens can call this directly (no provider threading needed).
