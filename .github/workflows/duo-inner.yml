@@ -1,0 +1,137 @@
+name: duo-inner
+
+on:
+  workflow_dispatch:
+
+jobs:
+  inner:
+    runs-on: xcode-27
+    timeout-minutes: 75
+    env:
+      BUNDLE_ID: ${{ vars.VV_BUNDLE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+
+      - name: Prebuild
+        run: npx expo prebuild --platform ios --clean --non-interactive
+
+      - name: Build for simulator (Release = JS bundled)
+        run: |
+          set -o pipefail
+          cd ios
+          WORKSPACE=$(ls -d *.xcworkspace | head -1)
+          SCHEME="${WORKSPACE%.xcworkspace}"
+          xcodebuild build \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tail -25
+
+      - name: Create + boot iPhone Duo, open Device Hub
+        run: |
+          set -x
+          UDID=$(xcrun simctl create "DuoCI" "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo" "com.apple.CoreSimulator.SimRuntime.iOS-27-1" || true)
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b || true
+          open /Applications/Xcode_27.1.app/Contents/Applications/DeviceHub.app --args -CurrentDeviceUDID "$UDID" || true
+          sleep 45
+
+      - name: Install and launch
+        run: |
+          set -x
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products/Release-iphonesimulator" -maxdepth 1 -name "*.app" | head -1)
+          echo "APP=$APP"
+          xcrun simctl install "$UDID" "$APP"
+          (xcrun simctl launch --console-pty "$UDID" "$BUNDLE_ID" > "$RUNNER_TEMP/app.log" 2>&1 &)
+          sleep 30
+          head -40 "$RUNNER_TEMP/app.log" || true
+
+      - name: Unfold the Duo via Device Hub, then shoot both displays
+        run: |
+          set -x
+          mkdir -p out
+
+          cat > "$RUNNER_TEMP/winbounds.swift" <<'SWIFT'
+          import Foundation
+          import CoreGraphics
+          let opts: CGWindowListOption = [.optionAll, .excludeDesktopElements]
+          if let list = CGWindowListCopyWindowInfo(opts, kCGNullWindowID) as? [[String: Any]] {
+            for w in list {
+              let owner = w[kCGWindowOwnerName as String] as? String ?? "?"
+              let name = w[kCGWindowName as String] as? String ?? ""
+              let num = w[kCGWindowNumber as String] as? Int ?? -1
+              let b = w[kCGWindowBounds as String] as? [String: Any] ?? [:]
+              let x = b["X"] as? Double ?? -1
+              let y = b["Y"] as? Double ?? -1
+              let wd = b["Width"] as? Double ?? -1
+              let ht = b["Height"] as? Double ?? -1
+              print("\(num)\t\(owner)\t\(name)\t\(Int(x))\t\(Int(y))\t\(Int(wd))\t\(Int(ht))")
+            }
+          }
+          SWIFT
+
+          cat > "$RUNNER_TEMP/click.swift" <<'SWIFT'
+          import Foundation
+          import AppKit
+          import CoreGraphics
+          let a = CommandLine.arguments
+          let x = Double(a[1])!, y = Double(a[2])!
+          if let app = NSWorkspace.shared.runningApplications.first(where: { $0.localizedName?.contains("Device Hub") == true }) {
+            app.activate(options: [.activateIgnoringOtherApps])
+            usleep(800_000)
+          }
+          let p = CGPoint(x: x, y: y)
+          CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: p, mouseButton: .left)?.post(tap: .cghidEventTap)
+          usleep(300_000)
+          CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: p, mouseButton: .left)?.post(tap: .cghidEventTap)
+          usleep(120_000)
+          CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: p, mouseButton: .left)?.post(tap: .cghidEventTap)
+          SWIFT
+
+          swift "$RUNNER_TEMP/winbounds.swift" > "$RUNNER_TEMP/win.txt" 2>&1 || true
+          cat "$RUNNER_TEMP/win.txt"
+          LINE=$(awk -F'\t' '$3=="DuoCI" {print; exit}' "$RUNNER_TEMP/win.txt")
+          WX=$(echo "$LINE" | cut -f4)
+          WY=$(echo "$LINE" | cut -f5)
+          WW=$(echo "$LINE" | cut -f6)
+          WH=$(echo "$LINE" | cut -f7)
+          WID=$(echo "$LINE" | cut -f1)
+          echo "win=$WX,$WY ${WW}x${WH} id=$WID"
+
+          # 3rd form-factor button in the bottom strip = unfold to inner display
+          CX=$(( WX + $(python3 -c "print(int($WW*0.693))") ))
+          CY=$(( WY + $(python3 -c "print(int($WH*0.961))") ))
+          echo "click unfold at $CX,$CY"
+          swift "$RUNNER_TEMP/click.swift" "$CX" "$CY" || true
+          sleep 12
+
+          xcrun simctl io "$UDID" enumerate > out/inner-enumerate.txt 2>&1 || true
+          xcrun simctl io "$UDID" screenshot --display=3 "out/duo-inner.png" || true
+          xcrun simctl io "$UDID" screenshot --display=1 "out/duo-outer.png" || true
+          screencapture -x -o -l "$WID" "out/hub-unfolded.png" || true
+          grep -aF "duo" "$RUNNER_TEMP/app.log" | tail -5 || true
+          ls -l out || true
+          for f in out/*.png; do sips -g pixelWidth -g pixelHeight "$f" || true; done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: duo-inner-shots
+          path: out
+          if-no-files-found: warn
