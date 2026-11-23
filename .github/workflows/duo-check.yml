@@ -1,0 +1,80 @@
+name: duo-check
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: xcode-27
+    timeout-minutes: 75
+    env:
+      BUNDLE_ID: ${{ vars.VV_BUNDLE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+
+      - name: Prebuild
+        run: npx expo prebuild --platform ios --clean --non-interactive
+
+      - name: Create + boot iPhone Duo simulator
+        run: |
+          set -x
+          UDID=$(xcrun simctl create "DuoCI" "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo" "com.apple.CoreSimulator.SimRuntime.iOS-27-1" || true)
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b || true
+          open -a Simulator --args -CurrentDeviceUDID "$UDID" || true
+          sleep 25
+
+      - name: Build for simulator
+        run: |
+          set -o pipefail
+          cd ios
+          WORKSPACE=$(ls -d *.xcworkspace | head -1)
+          SCHEME="${WORKSPACE%.xcworkspace}"
+          xcodebuild build \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$UDID" \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tail -40
+
+      - name: Install and launch on Duo
+        run: |
+          set -x
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products" -maxdepth 2 -name "*.app" | head -1)
+          echo "APP=$APP"
+          xcrun simctl install "$UDID" "$APP"
+          (xcrun simctl launch --console-pty "$UDID" "$BUNDLE_ID" > "$RUNNER_TEMP/app.log" 2>&1 &)
+          sleep 30
+          head -60 "$RUNNER_TEMP/app.log" || true
+
+      - name: Screenshots
+        run: |
+          set -x
+          mkdir -p out
+          for i in 1 2 3; do
+            xcrun simctl io "$UDID" screenshot "out/duo-$i.png" && break || sleep 5
+          done
+          ls -l out || true
+          for f in out/*.png; do sips -g pixelWidth -g pixelHeight "$f" || true; done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: duo-check-shots
+          path: out
+          if-no-files-found: warn
