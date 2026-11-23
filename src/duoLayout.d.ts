@@ -4,6 +4,7 @@ export interface DuoLayout {
   wide: boolean;
   twoPane: boolean;
   extraWide: boolean;
+  duoShaped: boolean;
   mode: 'split' | 'stack';
   columns: number;
   left: number;
@@ -23,6 +24,10 @@ export const WIDE_MIN: number;
 export const TWO_PANE_MIN: number;
 export const XL_MIN: number;
 export const WIDE_RIGHT_GUTTER: number;
+export const DUO_RIGHT_GUTTER: number;
 export const WIDE_TOP_INSET: number;
+export const DUO_TOP_INSET: number;
 export const COMPACT_TOP_INSET: number;
+export const DUO_ASPECT_MAX: number;
+export const DUO_MIN_WIDTH: number;
 export const MAX_CONTENT_WIDTH: number;
