@@ -66,9 +66,13 @@ jobs:
         run: |
           set -x
           mkdir -p out
-          for i in 1 2 3; do
-            xcrun simctl io "$UDID" screenshot "out/duo-$i.png" && break || sleep 5
+          # Duo exposes two displays: 3 = inner (open), 1 = outer (closed)
+          for d in 3 1; do
+            for i in 1 2 3; do
+              xcrun simctl io "$UDID" screenshot --display=$d "out/duo-display$d.png" && break || sleep 4
+            done
           done
+          grep -a "\[duo\]" "$RUNNER_TEMP/app.log" | tail -5 || true
           ls -l out || true
           for f in out/*.png; do sips -g pixelWidth -g pixelHeight "$f" || true; done
 
