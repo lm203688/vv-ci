@@ -1,7 +1,7 @@
 {
   "name": "VehicleVault",
   "slug": "vehiclevault",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "orientation": "portrait",
   "scheme": "vehiclevault",
   "userInterfaceStyle": "light",
@@ -10,7 +10,7 @@
   "ios": {
     "supportsTablet": true,
     "bundleIdentifier": "com.example.vehiclevault",
-    "buildNumber": "4",
+    "buildNumber": "5",
     "appleTeamId": "",
     "infoPlist": {
       "NSCameraUsageDescription": "Take a photo of the dashboard or a service receipt. Photos stay on this device.",
@@ -21,6 +21,7 @@
     "package": "com.example.vehiclevault"
   },
   "plugins": [
+    "./plugins/withUIScene.cjs",
     "expo-sqlite",
     "expo-notifications",
     "expo-secure-store",
@@ -33,4 +34,3 @@
     "./plugins/withWidget.cjs"
   ]
 }
-
