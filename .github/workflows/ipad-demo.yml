@@ -1,0 +1,84 @@
+name: ipad-demo
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: xcode-27
+    timeout-minutes: 75
+    env:
+      BUNDLE_ID: ${{ vars.VV_BUNDLE_ID }}
+      EXPO_PUBLIC_DEMO: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+
+      - name: Prebuild
+        run: npx expo prebuild --platform ios --clean --non-interactive
+
+      - name: Create + boot iPad
+        run: |
+          set -x
+          PAD=$(xcrun simctl create "PadCI" "com.apple.CoreSimulator.SimDeviceType.iPad-10th-generation" "com.apple.CoreSimulator.SimRuntime.iOS-27-0" || true)
+          echo "PAD=$PAD" >> "$GITHUB_ENV"
+          xcrun simctl boot "$PAD" || true
+          xcrun simctl bootstatus "$PAD" -b || true
+
+      - name: Build for simulator (Release, demo data baked in)
+        run: |
+          set -o pipefail
+          cd ios
+          WORKSPACE=$(ls -d *.xcworkspace | head -1)
+          SCHEME="${WORKSPACE%.xcworkspace}"
+          xcodebuild build \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$PAD" \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tail -25
+
+      - name: Install, launch, wait for demo steps, shoot
+        run: |
+          set -x
+          mkdir -p out
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products/Release-iphonesimulator" -maxdepth 1 -name "*.app" | head -1)
+          xcrun simctl install "$PAD" "$APP"
+          (xcrun simctl launch --console-pty "$PAD" "$BUNDLE_ID" > "$RUNNER_TEMP/app.log" 2>&1 &)
+          DOCS="$(xcrun simctl get_app_container "$PAD" "$BUNDLE_ID" data)/Documents"
+          echo "DOCS=$DOCS"
+          for t in $(seq 1 60); do
+            if [ -f "$DOCS/step_detail.txt" ]; then echo "detail marker at ${t}s"; break; fi
+            sleep 1
+          done
+          sleep 2
+          xcrun simctl io "$PAD" screenshot "out/pad-detail.png" || true
+          for t in $(seq 1 45); do
+            if [ -f "$DOCS/step_settings.txt" ]; then echo "settings marker"; break; fi
+            sleep 1
+          done
+          sleep 1
+          xcrun simctl io "$PAD" screenshot "out/pad-settings.png" || true
+          ls -l "$DOCS" || true
+          ls -l out || true
+          for f in out/*.png; do sips -g pixelWidth -g pixelHeight "$f" || true; done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ipad-demo-shots
+          path: out
+          if-no-files-found: warn
