@@ -1,0 +1,85 @@
+name: ipad-check
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: xcode-27
+    timeout-minutes: 75
+    env:
+      BUNDLE_ID: ${{ vars.VV_BUNDLE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+
+      - name: Prebuild
+        run: npx expo prebuild --platform ios --clean --non-interactive
+
+      - name: Create + boot iPad
+        run: |
+          set -x
+          PAD=""
+          for RT in com.apple.CoreSimulator.SimRuntime.iOS-27-0 com.apple.CoreSimulator.SimRuntime.iOS-27-2; do
+            for T in com.apple.CoreSimulator.SimDeviceType.iPad-10th-generation com.apple.CoreSimulator.SimDeviceType.iPad-9th-generation com.apple.CoreSimulator.SimDeviceType.iPad-A16; do
+              PAD=$(xcrun simctl create "PadCI" "$T" "$RT" 2>/dev/null || true)
+              if [ -n "$PAD" ]; then echo "CREATED $T $RT -> $PAD"; break 2; fi
+            done
+          done
+          echo "PAD=$PAD" >> "$GITHUB_ENV"
+          xcrun simctl boot "$PAD" || true
+          xcrun simctl bootstatus "$PAD" -b || true
+
+      - name: Build for simulator (Release = JS bundled)
+        run: |
+          set -o pipefail
+          cd ios
+          WORKSPACE=$(ls -d *.xcworkspace | head -1)
+          SCHEME="${WORKSPACE%.xcworkspace}"
+          xcodebuild build \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$PAD" \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tail -25
+
+      - name: Install and launch on iPad
+        run: |
+          set -x
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products/Release-iphonesimulator" -maxdepth 1 -name "*.app" | head -1)
+          echo "APP=$APP"
+          xcrun simctl install "$PAD" "$APP"
+          (xcrun simctl launch --console-pty "$PAD" "$BUNDLE_ID" > "$RUNNER_TEMP/app.log" 2>&1 &)
+          sleep 35
+          head -40 "$RUNNER_TEMP/app.log" || true
+
+      - name: Screenshots
+        run: |
+          set -x
+          mkdir -p out
+          for i in 1 2 3; do
+            xcrun simctl io "$PAD" screenshot "out/pad-wide.png" && break || sleep 4
+          done
+          xcrun simctl io "$PAD" enumerate > out/pad-enumerate.txt 2>&1 || true
+          ls -l out || true
+          for f in out/*.png; do sips -g pixelWidth -g pixelHeight "$f" || true; done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ipad-check-shots
+          path: out
+          if-no-files-found: warn
