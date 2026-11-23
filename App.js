@@ -18,6 +18,7 @@ import { syncWidget } from './src/widget';
 import { isDemo, runDemo } from './src/demo';
 import FeedbackModal from './src/FeedbackModal';
 import { useDuo } from './src/duo';
+import AiAssist from './src/aiAssist';
 
 const Stack = createNativeStackNavigator();
 
@@ -641,6 +642,7 @@ export default function App() {
   return (
     <View style={{ flex: 1, backgroundColor: 'transparent', paddingRight: duo.gutter }}>
       <AppScreens />
+      <AiAssist app="VehicleVault" hint="Vehicle service history and maintenance intervals, what to record for resale value." gutter={duo.gutter} />
     </View>
   );
 }
