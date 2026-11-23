@@ -21,6 +21,7 @@
     "package": "com.example.vehiclevault"
   },
   "plugins": [
+    "./plugins/withAppIntents.cjs",
     "./plugins/withUIScene.cjs",
     "expo-sqlite",
     "expo-notifications",
