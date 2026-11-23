@@ -16,6 +16,7 @@ import { extract, PROVIDERS } from './src/ai';
 import { getAiConfig, saveAiConfig, clearAiConfig } from './src/secrets';
 import { syncWidget } from './src/widget';
 import { isDemo, runDemo } from './src/demo';
+import FeedbackModal from './src/FeedbackModal';
 
 const Stack = createNativeStackNavigator();
 
@@ -447,6 +448,7 @@ function SettingsScreen() {
   const { c, s, t } = useUi();
   const [units, setUnits] = useState('mi');
   const [busy, setBusy] = useState(false);
+  const [fbOpen, setFbOpen] = useState(false);
   const [scheduled, setScheduled] = useState(0);
   const [vehicle, setVehicle] = useState(null);
   const [probe, setProbe] = useState('');
@@ -625,6 +627,10 @@ function SettingsScreen() {
 
       <Text style={{ fontSize: t.caption, fontWeight: '700', color: c.muted, marginTop: s.lg, marginBottom: s.xs }}>Data</Text>
       <Text style={{ fontSize: t.sub, color: c.muted, lineHeight: 22 }}>Every record stays on this phone. No account, no cloud.</Text>
+      <Text style={{ fontSize: t.caption, fontWeight: '700', color: c.muted, marginTop: s.lg, marginBottom: s.xs }}>Feedback</Text>
+      <Text style={{ fontSize: t.sub, color: c.muted, lineHeight: 22, marginBottom: s.sm }}>Wrong reminder, a record that went missing, or a feature you want? Send a report — it opens your own mail app, nothing is uploaded by the app.</Text>
+      <PrimaryButton title="Send feedback" onPress={() => setFbOpen(true)} />
+      <FeedbackModal visible={fbOpen} onClose={() => setFbOpen(false)} context="settings" accent={c.primary} />
     </ScrollView>
   );
 }
