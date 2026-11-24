@@ -76,6 +76,9 @@ jobs:
           VV_PROFILE_WIDGET: ${{ secrets.PROFILE_WIDGET_UUID }}
         run: npx expo prebuild --platform ios --clean --non-interactive
 
+      - name: Guard app icon has no alpha (ITMS-90717)
+        run: python3 .github/scripts/check_icon_alpha.py
+
       - name: Check target signing settings
         run: |
           grep -o 'PROVISIONING_PROFILE_SPECIFIER = [^;]*' ios/*.xcodeproj/project.pbxproj || true
