@@ -11,6 +11,7 @@ on:
 env:
   BUNDLE_ID: ${{ vars.VV_BUNDLE_ID }}
   WIDGET_BUNDLE_ID: ${{ vars.VV_WIDGET_BUNDLE_ID }}
+  WATCH_BUNDLE_ID: ${{ vars.VV_WATCH_BUNDLE_ID }}
   TEAM_ID: ${{ vars.VV_TEAM_ID }}
 
 jobs:
@@ -55,11 +56,14 @@ jobs:
           PROFILE_MAIN_UUID: ${{ secrets.PROFILE_MAIN_UUID }}
           PROFILE_WIDGET_B64: ${{ secrets.PROFILE_WIDGET_B64 }}
           PROFILE_WIDGET_UUID: ${{ secrets.PROFILE_WIDGET_UUID }}
+          PROFILE_WATCH_B64: ${{ secrets.PROFILE_WATCH_B64 }}
+          PROFILE_WATCH_UUID: ${{ secrets.PROFILE_WATCH_UUID }}
         run: |
           set -x
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
           printf '%s' "$PROFILE_MAIN_B64" | base64 -d > "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_MAIN_UUID.mobileprovision"
           printf '%s' "$PROFILE_WIDGET_B64" | base64 -d > "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_WIDGET_UUID.mobileprovision"
+          printf '%s' "$PROFILE_WATCH_B64" | base64 -d > "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_WATCH_UUID.mobileprovision"
           ls -l "$HOME/Library/MobileDevice/Provisioning Profiles"
 
       - name: Write App Store Connect API key
@@ -74,6 +78,7 @@ jobs:
         env:
           VV_PROFILE_MAIN: ${{ secrets.PROFILE_MAIN_UUID }}
           VV_PROFILE_WIDGET: ${{ secrets.PROFILE_WIDGET_UUID }}
+          VV_PROFILE_WATCH: ${{ secrets.PROFILE_WATCH_UUID }}
         run: npx expo prebuild --platform ios --clean --non-interactive
 
       - name: Guard app icon has no alpha (ITMS-90717)
@@ -115,6 +120,7 @@ jobs:
           ASC_ISSUER: ${{ secrets.ASC_ISSUER }}
           PROFILE_MAIN_UUID: ${{ secrets.PROFILE_MAIN_UUID }}
           PROFILE_WIDGET_UUID: ${{ secrets.PROFILE_WIDGET_UUID }}
+          PROFILE_WATCH_UUID: ${{ secrets.PROFILE_WATCH_UUID }}
         run: |
           set -o pipefail
           cat > "$RUNNER_TEMP/export.plist" <<PLIST
@@ -130,6 +136,7 @@ jobs:
             <dict>
               <key>$BUNDLE_ID</key><string>$PROFILE_MAIN_UUID</string>
               <key>$WIDGET_BUNDLE_ID</key><string>$PROFILE_WIDGET_UUID</string>
+              <key>$WATCH_BUNDLE_ID</key><string>$PROFILE_WATCH_UUID</string>
             </dict>
             <key>uploadSymbols</key><true/>
             <key>stripSwiftSymbols</key><true/>
@@ -166,6 +173,14 @@ jobs:
           codesign -d --entitlements :- "$APP/PlugIns/VehicleVaultWidget.appex" 2>/dev/null | grep -A3 'application-groups' || true
           codesign -dv "$APP/PlugIns/VehicleVaultWidget.appex" 2>&1 | grep -Ei 'Identifier|TeamIdentifier' | head -4 || true
 
+
+          echo "== watch app gate =="
+          WA="$APP/Watch/VehicleVaultWatch.app"
+          test -d "$WA" || { echo "FAIL: watch app not embedded in the archive"; exit 1; }
+          test -f "$WA/VehicleVaultWatch" || { echo "FAIL: watch app binary missing"; exit 1; }
+          plutil -p "$WA/Info.plist" | grep -E 'CFBundleIdentifier|WKCompanionAppBundleIdentifier|CFBundleVersion' || true
+          codesign -dv "$WA" 2>&1 | grep -Ei 'Identifier|TeamIdentifier' | head -4 || true
+          echo "OK: watchOS app embedded and signed"
 
           echo "== app intents gate =="
           test -d "$APP/Metadata.appintents" || { echo "FAIL: no App Intents metadata in signed ipa"; exit 1; }
