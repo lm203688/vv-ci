@@ -106,7 +106,7 @@ jobs:
           echo "watchOS SDK: $SDK"
           for f in targets/watch/*.swift; do
             echo "--- $f"
-            xcrun swiftc -typecheck -sdk "$SDK" -target arm64_32-apple-watchos11.0 "$f"
+            xcrun swiftc -typecheck -parse-as-library -sdk "$SDK" -target arm64_32-apple-watchos11.0 "$f"
           done
 
       - name: Export ipa
