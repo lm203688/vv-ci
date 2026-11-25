@@ -84,6 +84,11 @@ function copySources(config, appGroup) {
       for (const f of fs.readdirSync(srcDir)) {
         if (f.endsWith('.swift')) fs.copyFileSync(path.join(srcDir, f), path.join(dstDir, f));
       }
+      // 实时活动的属性类型要在主 App 与扩展各编译一份，两边必须同源。
+      const attrSrc = path.join(root, 'modules', 'vv-shared', 'ios', 'ServiceActivityAttributes.swift');
+      if (fs.existsSync(attrSrc)) {
+        fs.copyFileSync(attrSrc, path.join(dstDir, 'ServiceActivityAttributes.swift'));
+      }
       const entitlements = entitlementsXml(appGroup);
       fs.writeFileSync(path.join(dstDir, `${TARGET_NAME}-Info.plist`), WIDGET_INFO_PLIST);
       fs.writeFileSync(path.join(dstDir, `${TARGET_NAME}.entitlements`), entitlements);
@@ -94,6 +99,15 @@ function copySources(config, appGroup) {
         fs.writeFileSync(path.join(appDir, `${appName}.entitlements`), entitlements);
         // 主 target 的 build setting 在下面的 xcode mod 里指向这个文件
         cfg._vvAppEntitlements = `${appName}/${appName}.entitlements`;
+        // 锁屏实时活动需要主 App 的 Info.plist 显式声明，缺了系统直接不显示。
+        const infoPath = path.join(appDir, 'Info.plist');
+        if (fs.existsSync(infoPath)) {
+          let info = fs.readFileSync(infoPath, 'utf8');
+          if (!info.includes('NSSupportsLiveActivities')) {
+            info = info.replace('<dict>', '<dict>\n\t<key>NSSupportsLiveActivities</key>\n\t<true/>');
+            fs.writeFileSync(infoPath, info);
+          }
+        }
       }
       return cfg;
     },
@@ -135,10 +149,6 @@ module.exports = function withWidget(config) {
       .map((f) => `${TARGET_NAME}/${f}`);
     proj.addBuildPhase(swiftFiles, 'PBXSourcesBuildPhase', 'Sources', targetUuid);
 
-    const widgets = fs.readdirSync(dstDir).filter((f) => f.endsWith('.swift'));
-    if (widgets.length !== 1) {
-      console.warn(`[withWidget] 期望 1 个 swift 文件，实际 ${widgets.join(', ')}`);
-    }
 
     eachBuildSetting(proj, targetUuid, (bs) => {
       Object.assign(bs, {
