@@ -6,16 +6,13 @@ import Foundation
 // 下次保养到底哪一天/哪一里数先到，以及这趟跑下来油钱多少、每英里多少。
 
 @available(iOS 16.0, *)
-struct ServiceCadenceEntity: AppEntity, IndexedEntity {
+struct ServiceCadenceEntity: AppEntity {
   static var typeDisplayRepresentation: TypeDisplayRepresentation = TypeDisplayRepresentation(name: "Service interval")
   static var defaultQuery = ServiceCadenceQuery()
 
   let id: String
 
-  // Spotlight shows this title when the user searches system-wide; the key is a
-  // CSSearchableItemAttributeSet field, not the entity's own property name.
-  @Property(indexingKey: \.displayName)
-  var summary: String
+  let summary: String
   let months: Int
   let miles: Int
 
@@ -210,3 +207,7 @@ struct VehicleVaultShortcuts: AppShortcutsProvider {
     )
   }
 }
+
+// Spotlight: from iOS 18 the entity is searchable system-wide by its display name.
+@available(iOS 18.0, *)
+extension ServiceCadenceEntity: IndexedEntity {}
