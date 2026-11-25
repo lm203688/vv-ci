@@ -3,7 +3,7 @@ import SwiftUI
 import WidgetKit
 
 // 锁屏与灵动岛共用的实时活动：临期保养倒计时，点开回到车库。
-@available(iOS 16.1, *)
+@available(iOS 16.2, *)
 struct ServiceLiveActivityWidget: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: ServiceActivityAttributes.self) { context in
