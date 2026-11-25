@@ -58,6 +58,7 @@ jobs:
           PROFILE_WIDGET_UUID: ${{ secrets.PROFILE_WIDGET_UUID }}
           PROFILE_WATCH_B64: ${{ secrets.PROFILE_WATCH_B64 }}
           PROFILE_WATCH_UUID: ${{ secrets.PROFILE_WATCH_UUID }}
+          WATCH_PROFILE_SPEC: ${{ vars.VV_WATCH_PROFILE }}
         run: |
           set -x
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
@@ -78,7 +79,7 @@ jobs:
         env:
           VV_PROFILE_MAIN: ${{ secrets.PROFILE_MAIN_UUID }}
           VV_PROFILE_WIDGET: ${{ secrets.PROFILE_WIDGET_UUID }}
-          VV_PROFILE_WATCH: ${{ secrets.PROFILE_WATCH_UUID }}
+          VV_PROFILE_WATCH: ${{ vars.VV_WATCH_PROFILE }}
         run: npx expo prebuild --platform ios --clean --non-interactive
 
       - name: Guard app icon has no alpha (ITMS-90717)
@@ -87,6 +88,15 @@ jobs:
       - name: Check target signing settings
         run: |
           grep -o 'PROVISIONING_PROFILE_SPECIFIER = [^;]*' ios/*.xcodeproj/project.pbxproj || true
+
+      - name: Inspect installed provisioning profiles
+        run: |
+          set -x
+          for f in "$HOME/Library/MobileDevice/Provisioning Profiles"/*.mobileprovision; do
+            echo "### $f"
+            security cms -D -i "$f" 2>/dev/null | plutil -p - 2>/dev/null | grep -E '"Name"|"UUID"|"Platform|"TeamIdentifier|application-identifier|-groups' -A2 | head -20
+          done
+          security find-identity -v -p codesigning build.keychain || true
 
       - name: Add the watch target to the scheme BuildAction
         run: python3 .github/scripts/patch_watch_scheme.py
@@ -129,6 +139,7 @@ jobs:
           PROFILE_MAIN_UUID: ${{ secrets.PROFILE_MAIN_UUID }}
           PROFILE_WIDGET_UUID: ${{ secrets.PROFILE_WIDGET_UUID }}
           PROFILE_WATCH_UUID: ${{ secrets.PROFILE_WATCH_UUID }}
+          WATCH_PROFILE_SPEC: ${{ vars.VV_WATCH_PROFILE }}
         run: |
           set -o pipefail
           cat > "$RUNNER_TEMP/export.plist" <<PLIST
@@ -144,7 +155,7 @@ jobs:
             <dict>
               <key>$BUNDLE_ID</key><string>$PROFILE_MAIN_UUID</string>
               <key>$WIDGET_BUNDLE_ID</key><string>$PROFILE_WIDGET_UUID</string>
-              <key>$WATCH_BUNDLE_ID</key><string>$PROFILE_WATCH_UUID</string>
+              <key>$WATCH_BUNDLE_ID</key><string>$WATCH_PROFILE_SPEC</string>
             </dict>
             <key>uploadSymbols</key><true/>
             <key>stripSwiftSymbols</key><true/>
