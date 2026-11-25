@@ -145,7 +145,7 @@ struct VehicleVaultWidgetBundle: WidgetBundle {
     if #available(iOS 18.0, *) {
       NextServiceControl()
     }
-    if #available(iOS 16.1, *) {
+    if #available(iOS 16.2, *) {
       ServiceLiveActivityWidget()
     }
   }
