@@ -1,5 +1,6 @@
 import SwiftUI
 import WidgetKit
+import AppIntents
 
 // App Group 约定为 "group." + 主 App bundle id；本扩展的 bundle id 带 ".widget" 后缀，去掉后同源。
 private var appGroup: String {
@@ -96,8 +97,33 @@ struct DueView: View {
   }
 }
 
-@main
-struct VehicleVaultWidget: Widget {
+// Control Centre 的按钮要打开主 App，所以动作是一个声明了 openAppWhenRun 的 AppIntent。
+@available(iOS 18.0, *)
+struct OpenVehicleVaultControlIntent: AppIntent {
+  static var title: LocalizedStringResource = "Open VehicleVault"
+  static var description = IntentDescription("Opens the garage from Control Centre.")
+  static var openAppWhenRun: Bool = true
+
+  func perform() async throws -> some IntentResult {
+    .result()
+  }
+}
+
+// 控制中心 / 锁屏的一键入口：不用解锁翻页，按下去就回到"下次保养"。
+@available(iOS 18.0, *)
+struct NextServiceControl: ControlWidget {
+  var body: some ControlWidgetConfiguration {
+    StaticControlConfiguration(kind: "NextServiceControl") {
+      ControlWidgetButton(action: OpenVehicleVaultControlIntent()) {
+        Label("Next service", systemImage: "wrench.and.screwdriver")
+      }
+    }
+    .displayName("Next service")
+    .description("Opens the garage at the next service.")
+  }
+}
+
+struct VehicleVaultDueWidget: Widget {
   let kind = "VehicleVaultDue"
 
   var body: some WidgetConfiguration {
@@ -107,5 +133,17 @@ struct VehicleVaultWidget: Widget {
     .configurationDisplayName("Next service")
     .description("Shows how many days are left until the next service on your most recent car.")
     .supportedFamilies([.systemSmall])
+  }
+}
+
+// 扩展成一个 bundle：iOS 17 只有主 widget，iOS 18 起多一个控制中心控件。
+@main
+struct VehicleVaultWidgetBundle: WidgetBundle {
+  @WidgetBundleBuilder
+  var body: some Widget {
+    VehicleVaultDueWidget()
+    if #available(iOS 18.0, *) {
+      NextServiceControl()
+    }
   }
 }
