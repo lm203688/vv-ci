@@ -156,6 +156,23 @@ jobs:
           codesign -d --entitlements :- "$APP/PlugIns/VehicleVaultWidget.appex" 2>/dev/null | grep -A3 'application-groups' || true
           codesign -dv "$APP/PlugIns/VehicleVaultWidget.appex" 2>&1 | grep -Ei 'Identifier|TeamIdentifier' | head -4 || true
 
+
+          echo "== app intents gate =="
+          test -d "$APP/Metadata.appintents" || { echo "FAIL: no App Intents metadata in signed ipa"; exit 1; }
+          ls -l "$APP/Metadata.appintents" || true
+          for I in ServiceDueIntent FuelCostIntent; do
+            grep -raq "$I" "$APP/Metadata.appintents" || { echo "FAIL: intent $I not compiled into metadata"; exit 1; }
+          done
+          strings -a "$APP/Metadata.appintents"/* | grep -o "[A-Za-z]*Intent" | sort -u | head -25 || true
+          echo "OK: parameterized app intents compiled into the bundle"
+
+          echo "== apple-fm gate =="
+          test -f modules/apple-fm/ios/AppleFMModule.swift || { echo "FAIL: apple-fm module source missing"; exit 1; }
+          test -f src/appleAi.js || { echo "FAIL: src/appleAi.js missing"; exit 1; }
+          grep -q "appleAi" App.js || { echo "FAIL: App.js does not use the on-device bridge"; exit 1; }
+          ls -l modules/apple-fm/ios || true
+          BIN=$(basename "$APP" .app)
+          strings -a "$APP/$BIN" 2>/dev/null | grep -c "AppleFMModule" || echo "WARN: AppleFMModule symbol not found in main binary"
       - name: Upload to App Store Connect
         if: ${{ inputs.upload }}
         env:
