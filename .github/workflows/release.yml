@@ -150,6 +150,10 @@ jobs:
             "$(node -p "require('./app.json').version")" \
             "$(node -p "require('./app.json').ios.buildNumber")" \
             "$(xcrun --sdk watchos --show-sdk-version)"
+          # 保证 altool 90713 要求的键一定在最终 plist 里
+          /usr/libexec/PlistBuddy -c 'Delete :CFBundleIconName' "$APP/Info.plist" >/dev/null 2>&1 || true
+          /usr/libexec/PlistBuddy -c 'Add :CFBundleIconName string AppIcon' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$APP/Info.plist"
           cat "$OUT/watch-partial.plist" | head -30 || true
 
           codesign --force --sign "Apple Distribution" --keychain build.keychain \
@@ -241,7 +245,8 @@ jobs:
           WA="$APP/Watch/VehicleVaultWatch.app"
           test -d "$WA" || { echo "FAIL: watch app not embedded in the archive"; exit 1; }
           test -f "$WA/VehicleVaultWatch" || { echo "FAIL: watch app binary missing"; exit 1; }
-          plutil -p "$WA/Info.plist" | grep -E 'CFBundleIdentifier|WKCompanionAppBundleIdentifier|CFBundleVersion' || true
+          plutil -p "$WA/Info.plist" | grep -E 'CFBundleIdentifier|WKCompanionAppBundleIdentifier|CFBundleVersion|CFBundleIconName' || true
+          plutil -p "$WA/Info.plist" | grep -q 'CFBundleIconName' || { echo "FAIL: CFBundleIconName missing in the watch Info.plist"; exit 1; }
           codesign -dv "$WA" 2>&1 | grep -Ei 'Identifier|TeamIdentifier' | head -4 || true
           echo "OK: watchOS app embedded and signed"
 
