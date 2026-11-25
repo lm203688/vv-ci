@@ -2,16 +2,17 @@ import SwiftUI
 
 // 手表端只读主 App 写进 App Group 的那一条「下次保养」：不在手表上重算里程，
 // 避免两端出现两个不同的数字。
-private var companionGroup: String {
-  var id = Bundle.main.bundleIdentifier ?? ""
-  if id.hasSuffix(".watchkitapp") { id = String(id.dropLast(".watchkitapp".count)) }
-  return "group." + id
-}
-
 struct WatchDueSnapshot {
   let car: String
   let label: String
   let days: Int
+
+  // 手表 App 的 bundle id 多一个 .watchkitapp 后缀，去掉后与主 App 同源，才能读到同一个 App Group。
+  private static var companionGroup: String {
+    var id = Bundle.main.bundleIdentifier ?? ""
+    if id.hasSuffix(".watchkitapp") { id = String(id.dropLast(".watchkitapp".count)) }
+    return "group." + id
+  }
 
   static func read() -> WatchDueSnapshot? {
     guard let store = UserDefaults(suiteName: companionGroup) else { return nil }
