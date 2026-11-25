@@ -117,6 +117,33 @@ jobs:
             OTHER_CODE_SIGN_FLAGS="--keychain build.keychain" \
             2>&1 | tee "$RUNNER_TEMP/archive.log" | tail -60
 
+      - name: Build and embed the watch app
+        env:
+          VV_PROFILE_WATCH: ${{ vars.VV_WATCH_PROFILE }}
+        run: |
+          set -o pipefail
+          cd ios
+          PROJ=$(ls -d *.xcodeproj | head -1)
+          xcodebuild build \
+            -project "$PROJ" \
+            -target VehicleVaultWatch \
+            -configuration Release \
+            -sdk watchos \
+            CONFIGURATION_BUILD_DIR="$RUNNER_TEMP/watchprod" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="$VV_PROFILE_WATCH" \
+            OTHER_CODE_SIGN_FLAGS="--keychain build.keychain" \
+            2>&1 | tail -40
+          ls -l "$RUNNER_TEMP/watchprod"
+          APP=$(find "$RUNNER_TEMP/vv.xcarchive/Products/Applications" -maxdepth 1 -name "*.app" | head -1)
+          echo "host app: $APP"
+          mkdir -p "$APP/Watch"
+          ditto "$RUNNER_TEMP/watchprod/VehicleVaultWatch.app" "$APP/Watch/VehicleVaultWatch.app"
+          codesign --force --sign "Apple Distribution" --keychain build.keychain "$APP/Watch/VehicleVaultWatch.app"
+          codesign -dv "$APP/Watch/VehicleVaultWatch.app" 2>&1 | grep -Ei 'Identifier|TeamIdentifier' || true
+
       - name: Archive diagnostics (watch)
         if: failure()
         run: |
