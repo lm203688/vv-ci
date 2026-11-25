@@ -40,6 +40,7 @@ def main():
         f'\t<key>DTSDKName</key>\n\t<string>watchos{sdk_version}</string>\n'
         '\t<key>IsSimulatorBuild</key>\n\t<false/>\n'
     )
+    plist = plist.replace('</dict>', '\t<key>CFBundleIconName</key>\n\t<string>AppIcon</string>\n</dict>')
     if 'DTPlatformName' not in plist:
         plist = plist.replace('</dict>', extra + '</dict>')
     with open(os.path.join(out, 'Info.plist'), 'w', encoding='utf-8') as f:
