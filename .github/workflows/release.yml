@@ -173,6 +173,11 @@ jobs:
           ls -l modules/apple-fm/ios || true
           BIN=$(basename "$APP" .app)
           strings -a "$APP/$BIN" 2>/dev/null | grep -c "AppleFMModule" || echo "WARN: AppleFMModule symbol not found in main binary"
+          echo "== widget control gate =="
+          WGX="$APP/PlugIns/VehicleVaultWidget.appex/VehicleVaultWidget"
+          test -f "$WGX" || { echo "FAIL: widget extension binary missing from ipa"; exit 1; }
+          strings -a "$WGX" 2>/dev/null | grep -c "NextServiceControl" || echo "WARN: control kind not found in widget binary"
+
       - name: Upload to App Store Connect
         if: ${{ inputs.upload }}
         env:
