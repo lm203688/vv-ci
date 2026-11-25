@@ -46,7 +46,7 @@ public class VvSharedModule: Module {
     }
 
     AsyncFunction("startServiceActivity") { (car: String, headline: String, detail: String, days: Int) -> Bool in
-      guard #available(iOS 16.1, *) else { return false }
+      guard #available(iOS 16.2, *) else { return false }
       guard ActivityAuthorizationInfo().areActivitiesEnabled else { return false }
       for activity in Activity<ServiceActivityAttributes>.activities {
         await activity.end(nil, dismissalPolicy: .immediate)
@@ -65,7 +65,7 @@ public class VvSharedModule: Module {
     }
 
     AsyncFunction("endServiceActivity") { () -> Bool in
-      guard #available(iOS 16.1, *) else { return false }
+      guard #available(iOS 16.2, *) else { return false }
       for activity in Activity<ServiceActivityAttributes>.activities {
         await activity.end(nil, dismissalPolicy: .immediate)
       }
