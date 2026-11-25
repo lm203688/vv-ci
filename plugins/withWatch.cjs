@@ -117,7 +117,7 @@ module.exports = function withWatch(config) {
         INFOPLIST_FILE: `"${TARGET_NAME}/${TARGET_NAME}-Info.plist"`,
         PRODUCT_BUNDLE_IDENTIFIER: `"${ids.watchBundle}"`,
         SWIFT_VERSION: '"5.0"',
-        SKIP_INSTALL: 'YES',
+        SKIP_INSTALL: 'NO',
         LD_RUNPATH_SEARCH_PATHS: '"$(inherited) @executable_path/Frameworks"',
       });
       if (ids.teamId) bs.DEVELOPMENT_TEAM = `"${ids.teamId}"`;
