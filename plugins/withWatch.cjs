@@ -118,11 +118,21 @@ module.exports = function withWatch(config) {
       .readdirSync(dstDir)
       .filter((f) => f.endsWith('.swift'))
       .map((f) => `${TARGET_NAME}/${f}`);
-    // addTarget 已经建好默认的 Sources 阶段；再建一个会让同一个 .swift 编出两份同名产物
-    // （Multiple commands produce ... .app/<exe>），所以只往目标里挂文件。
-    for (const f of swiftFiles) {
-      proj.addSourceFile(f, { target: targetUuid });
+    // addTarget 已经建了一个空的 Sources 阶段。直接用 addSourceFile 会挂到主 App 上
+    // （两个 @main 打架），再新建一个又会重复编译同名产物。所以先摘掉默认的，只留我们建的这个。
+    const nativeSections = proj.pbxNativeTargetSection();
+    const sourcesSection = proj.hash.project.objects['PBXSourcesBuildPhase'] || {};
+    const host = nativeSections[targetUuid];
+    if (host && host.buildPhases) {
+      host.buildPhases = host.buildPhases.filter((p) => {
+        if (sourcesSection[p.value]) {
+          delete sourcesSection[p.value];
+          return false;
+        }
+        return true;
+      });
     }
+    proj.addBuildPhase(swiftFiles, 'PBXSourcesBuildPhase', 'Sources', targetUuid);
 
     eachBuildSetting(proj, targetUuid, (bs) => {
       Object.assign(bs, {
