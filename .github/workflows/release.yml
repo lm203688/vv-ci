@@ -154,6 +154,13 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Delete :CFBundleIconName' "$APP/Info.plist" >/dev/null 2>&1 || true
           /usr/libexec/PlistBuddy -c 'Add :CFBundleIconName string AppIcon' "$APP/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Delete :CFBundleIcons' "$APP/Info.plist" >/dev/null 2>&1 || true
+          /usr/libexec/PlistBuddy -c 'Add :CFBundleIcons dict' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Add :CFBundleIcons:CFBundlePrimaryIcon dict' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName string AppIcon' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconFiles array' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconFiles:0 string AppIcon' "$APP/Info.plist"
+          plutil -convert binary1 "$APP/Info.plist"
           cat "$OUT/watch-partial.plist" | head -30 || true
 
           codesign --force --sign "Apple Distribution" --keychain build.keychain \
