@@ -1,0 +1,18 @@
+name: probe
+on:
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: xcode-27
+    steps:
+      - name: env
+        run: |
+          set -x
+          xcodebuild -version || true
+          sw_vers || true
+          ls /Applications | grep -i xcode || true
+          xcrun --sdk iphoneos --show-sdk-version || true
+          ls /Applications/Xcode*.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs || true
+          ls /Applications/Xcode*.app/Contents/Developer/Platforms/WatchOS.platform/Developer/SDKs || true
+          command -v xcodes || true
+          df -h / | tail -2
