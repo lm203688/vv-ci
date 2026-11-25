@@ -84,6 +84,35 @@ module.exports = function withWatch(config) {
 
     const created = proj.addTarget(TARGET_NAME, 'watch2_app', TARGET_NAME, watchBundle);
     const targetUuid = created.uuid;
+
+    // xcode 库会顺手给主 App 加一个 "Embed Watch Content" 拷贝阶段与依赖。等 watch 拿到
+    // 自己的 App ID 与分发描述文件后才会真正嵌入；现在留着会让 archive 去拷一个还没签名的
+    // 产物，直接报 no such file，所以先摘掉，只保留独立编译。
+    const appUuid = proj.getFirstTarget().uuid;
+    const native = proj.pbxNativeTargetSection();
+    if (native[appUuid] && native[appUuid].buildPhases) {
+      native[appUuid].buildPhases = native[appUuid].buildPhases.filter((p) => {
+        const phase = proj.hash.project.objects['PBXCopyFilesBuildPhase'][p.value];
+        if (!phase) return true;
+        if (String(phase.dstPath || '').includes('Watch')) {
+          delete proj.hash.project.objects['PBXCopyFilesBuildPhase'][p.value];
+          return false;
+        }
+        return true;
+      });
+    }
+    if (native[appUuid] && native[appUuid].dependencies) {
+      native[appUuid].dependencies = native[appUuid].dependencies.filter((d) => {
+        const dep = proj.hash.project.objects['PBXTargetDependency'][d.value];
+        if (!dep) return true;
+        const pointsAtWatch = (dep.target && dep.target === targetUuid) || (dep.target && dep.target.value === targetUuid);
+        if (pointsAtWatch) {
+          delete proj.hash.project.objects['PBXTargetDependency'][d.value];
+          return false;
+        }
+        return true;
+      });
+    }
     const dstDir = path.join(cfg.modRequest.projectRoot, 'ios', TARGET_NAME);
     const swiftFiles = fs
       .readdirSync(dstDir)
