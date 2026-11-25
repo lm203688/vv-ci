@@ -2,6 +2,19 @@ import ExpoModulesCore
 
 #if canImport(FoundationModels)
 import FoundationModels
+
+// Structured reply the UI can lay out as a headline plus a body. The model fills a
+// schema instead of free text, so the phone never receives a paragraph it has to
+// re-wrap, and the guidance can forbid inventing numbers.
+@available(iOS 26.0, *)
+@Generable
+struct FMNote {
+  @Guide(description: "Headline: at most six words. Do not repeat units that are already in the facts.")
+  var headline: String
+
+  @Guide(description: "Detail: two to four short sentences that only reword the given facts. Never invent a value.")
+  var detail: String
+}
 #endif
 
 // Bridge for Apple's Foundation Models framework.
@@ -82,6 +95,69 @@ public class AppleFMModule: Module {
       }
       #endif
       return ["ok": false, "error": "os-too-old", "backend": "none"]
+    }
+
+    // Same model, but it has to fill the FMNote schema: headline + detail. This is the
+    // path the card UI uses, because a fixed schema survives dynamic type and RTL
+    // without the app re-parsing prose.
+    AsyncFunction("respondStructured") { (prompt: String, instructions: String?) async -> [String: Any] in
+      #if canImport(FoundationModels)
+      if #available(iOS 26.0, *) {
+        let guidance = (instructions ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if case .available = SystemLanguageModel.default.availability {
+          do {
+            let session = LanguageModelSession(
+              model: SystemLanguageModel.default,
+              instructions: guidance.isEmpty ? nil : guidance
+            )
+            let response = try await session.respond(to: prompt, generating: FMNote.self)
+            return [
+              "ok": true,
+              "headline": response.content.headline,
+              "detail": response.content.detail,
+              "backend": "on-device",
+            ]
+          } catch {
+            return ["ok": false, "error": error.localizedDescription, "backend": "on-device"]
+          }
+        }
+
+        if #available(iOS 27.0, *) {
+          let cloud = PrivateCloudComputeLanguageModel()
+          guard cloud.isAvailable else {
+            return ["ok": false, "error": "model-unavailable", "backend": "none"]
+          }
+          do {
+            let session = LanguageModelSession(
+              model: cloud,
+              instructions: guidance.isEmpty ? nil : guidance
+            )
+            let response = try await session.respond(to: prompt, generating: FMNote.self)
+            return [
+              "ok": true,
+              "headline": response.content.headline,
+              "detail": response.content.detail,
+              "backend": "pcc",
+            ]
+          } catch {
+            return ["ok": false, "error": error.localizedDescription, "backend": "pcc"]
+          }
+        }
+
+        return ["ok": false, "error": "model-unavailable", "backend": "none"]
+      }
+      #endif
+      return ["ok": false, "error": "os-too-old", "backend": "none"]
+    }
+
+    // Schema handshake for the JS side: tells it whether structured output is
+    // implemented in this build, so the UI can fall back to plain text.
+    Function("supportsStructured") { () -> Bool in
+      #if canImport(FoundationModels)
+      if #available(iOS 26.0, *) { return true }
+      #endif
+      return false
     }
   }
 
