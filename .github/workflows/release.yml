@@ -118,31 +118,30 @@ jobs:
             2>&1 | tee "$RUNNER_TEMP/archive.log" | tail -60
 
       - name: Build and embed the watch app
-        env:
-          VV_PROFILE_WATCH: ${{ vars.VV_WATCH_PROFILE }}
         run: |
-          set -o pipefail
-          cd ios
-          PROJ=$(ls -d *.xcodeproj | head -1)
-          xcodebuild build \
-            -project "$PROJ" \
-            -target VehicleVaultWatch \
-            -configuration Release \
-            -sdk watchos \
-            CONFIGURATION_BUILD_DIR="$RUNNER_TEMP/watchprod" \
-            DEVELOPMENT_TEAM="$TEAM_ID" \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="$VV_PROFILE_WATCH" \
-            OTHER_CODE_SIGN_FLAGS="--keychain build.keychain" \
-            2>&1 | tail -40
-          ls -l "$RUNNER_TEMP/watchprod"
-          APP=$(find "$RUNNER_TEMP/vv.xcarchive/Products/Applications" -maxdepth 1 -name "*.app" | head -1)
-          echo "host app: $APP"
-          mkdir -p "$APP/Watch"
-          ditto "$RUNNER_TEMP/watchprod/VehicleVaultWatch.app" "$APP/Watch/VehicleVaultWatch.app"
-          codesign --force --sign "Apple Distribution" --keychain build.keychain "$APP/Watch/VehicleVaultWatch.app"
-          codesign -dv "$APP/Watch/VehicleVaultWatch.app" 2>&1 | grep -Ei 'Identifier|TeamIdentifier' || true
+          set -euo pipefail
+          SRC="ios/VehicleVaultWatch"
+          OUT="$RUNNER_TEMP/watchprod"
+          APP="$OUT/VehicleVaultWatch.app"
+          mkdir -p "$APP"
+          xcrun --sdk watchos swiftc \
+            -parse-as-library -O \
+            -target arm64_32-apple-watchos11.0 \
+            -sdk "$(xcrun --sdk watchos --show-sdk-path)" \
+            -o "$APP/VehicleVaultWatch" \
+            "$SRC/VehicleVaultWatchApp.swift"
+          python3 .github/scripts/make_watch_bundle.py "$SRC" "$APP" "$WATCH_BUNDLE_ID" \
+            "$(node -p "require('./app.json').expo.version")" \
+            "$(node -p "require('./app.json').expo.ios.buildNumber")"
+          codesign --force --sign "Apple Distribution" --keychain build.keychain \
+            --identifier "$WATCH_BUNDLE_ID" "$APP"
+          codesign -dv "$APP" 2>&1 | grep -Ei 'Identifier|TeamIdentifier' || true
+          HOST=$(find "$RUNNER_TEMP/vv.xcarchive/Products/Applications" -maxdepth 1 -name "*.app" | head -1)
+          echo "host app: $HOST"
+          mkdir -p "$HOST/Watch"
+          ditto "$APP" "$HOST/Watch/VehicleVaultWatch.app"
+          ls -l "$HOST/Watch/VehicleVaultWatch.app"
+          plutil -p "$HOST/Watch/VehicleVaultWatch.app/Info.plist" | head -20
 
       - name: Archive diagnostics (watch)
         if: failure()
