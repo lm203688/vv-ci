@@ -88,6 +88,9 @@ jobs:
         run: |
           grep -o 'PROVISIONING_PROFILE_SPECIFIER = [^;]*' ios/*.xcodeproj/project.pbxproj || true
 
+      - name: Add the watch target to the scheme BuildAction
+        run: python3 .github/scripts/patch_watch_scheme.py
+
       - name: Archive
         run: |
           set -o pipefail
@@ -102,7 +105,12 @@ jobs:
             -archivePath "$RUNNER_TEMP/vv.xcarchive" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
             OTHER_CODE_SIGN_FLAGS="--keychain build.keychain" \
-            2>&1 | tail -80
+            2>&1 | tee "$RUNNER_TEMP/archive.log" | tail -60
+
+      - name: Archive diagnostics (watch)
+        if: failure()
+        run: |
+          grep -a -n -E 'VehicleVaultWatch|Skipping|Embed Watch|error:' "$RUNNER_TEMP/archive.log" | tail -60 || true
 
       - name: Watch sources typecheck
         run: |
