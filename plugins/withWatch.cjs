@@ -105,6 +105,23 @@ module.exports = function withWatch(config) {
       .map((f) => `${TARGET_NAME}/${f}`);
     proj.addBuildPhase(swiftFiles, 'PBXSourcesBuildPhase', 'Sources', targetUuid);
 
+    // 归档阶段的 "Embed Watch Content" 拷贝阶段会和 watch target 自己的 CopyAndPreserveArchs
+    // 抢同一个输出文件（Multiple commands produce）。这里摘掉它，改由 release.yml 在 archive
+    // 之后单独编 watch、再 ditto 进 xcarchive 并重签。
+    const copySection = proj.hash.project.objects['PBXCopyFilesBuildPhase'] || {};
+    const appUuid = proj.getFirstTarget().uuid;
+    const appNat = proj.pbxNativeTargetSection()[appUuid];
+    for (const key of Object.keys(copySection)) {
+      if (key.endsWith('_comment')) continue;
+      const phase = copySection[key];
+      if (!phase || typeof phase !== 'object') continue;
+      if (!String(phase.name || '').includes('Embed Watch')) continue;
+      appNat.buildPhases = (appNat.buildPhases || []).filter((b) => (b.value || b) !== key);
+      delete copySection[key];
+      delete copySection[key + '_comment'];
+      console.log('withWatch: 摘掉自动生成的 Embed Watch Content 阶段');
+    }
+
     eachBuildSetting(proj, targetUuid, (bs) => {
       Object.assign(bs, {
         SDKROOT: '"watchos"',
