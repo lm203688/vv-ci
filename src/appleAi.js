@@ -46,3 +46,24 @@ export async function askAi(prompt, instructions) {
     return null;
   }
 }
+
+/** Structured answer: { headline, detail } or null. Requires the schema bridge. */
+export async function askStructured(prompt, instructions) {
+  if (!mod || typeof mod.respondStructured !== 'function') return null;
+  try {
+    const r = await mod.respondStructured(prompt, instructions);
+    if (!r || !r.ok || !r.headline) return null;
+    return { headline: r.headline, detail: r.detail || '', backend: r.backend || 'on-device' };
+  } catch {
+    return null;
+  }
+}
+
+/** True when this build can return the headline + detail schema. */
+export function supportsStructured() {
+  try {
+    return !!(mod && typeof mod.supportsStructured === 'function' && mod.supportsStructured());
+  } catch {
+    return false;
+  }
+}
