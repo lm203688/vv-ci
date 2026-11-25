@@ -5,39 +5,35 @@ jobs:
   probe:
     runs-on: xcode-27
     steps:
-      - name: typecheck new app-intents symbols on 27.2
+      - uses: actions/checkout@v4
+      - name: typecheck activity kit usage
         run: |
           set -x
-          export DEVELOPER_DIR=/Applications/Xcode_27.2.app
           SDK=$(xcrun --sdk iphoneos --show-sdk-path)
-          echo "SDK=$SDK"
-          mkdir -p /tmp/p && cd /tmp/p
-          cat > t1.swift <<'SW'
-          import AppIntents
-          @available(iOS 27.0, *)
-          struct ProbeTool: ToolIntent {
-            static var title: LocalizedStringResource { "Probe" }
-            static var description: IntentDescription { IntentDescription("probe") }
-            func perform() async throws -> some IntentResult { .result() }
+          cd /tmp && rm -rf at && mkdir at && cd at
+          cp "$GITHUB_WORKSPACE/modules/vv-shared/ios/ServiceActivityAttributes.swift" .
+          cat > use.swift <<'SW'
+          import ActivityKit
+          @available(iOS 16.1, *)
+          func probeStart(_ car: String) async -> Bool {
+            for activity in Activity<ServiceActivityAttributes>.activities {
+              await activity.end(nil, dismissalPolicy: .immediate)
+            }
+            let attributes = ServiceActivityAttributes(car: car)
+            let state = ServiceActivityAttributes.ContentState(headline: "h", detail: "d", days: 1)
+            do {
+              _ = try Activity.request(
+                attributes: attributes,
+                content: ActivityContent(state: state, staleDate: nil)
+              )
+              return true
+            } catch {
+              return false
+            }
           }
           SW
-          echo "--- ToolIntent"; swiftc -typecheck -sdk "$SDK" -target arm64-apple-ios27.2 t1.swift 2>&1 | head -20
-          cat > t2.swift <<'SW'
-          import SwiftUI
-          import AppIntents
-          @available(iOS 27.0, *)
-          func probeCard(_ snippet: CardSnippet) -> some View { snippet }
-          SW
-          echo "--- CardSnippet"; swiftc -typecheck -sdk "$SDK" -target arm64-apple-ios27.2 t2.swift 2>&1 | head -20
-          cat > t3.swift <<'SW'
-          import AppIntents
-          @available(iOS 27.0, *)
-          struct ProbeSkill: AppIntent {
-            static var title: LocalizedStringResource { "Skill probe" }
-            static var supportedModes: IntentModes { [.tool] }
-            func perform() async throws -> some IntentResult { .result() }
-          }
-          SW
-          echo "--- IntentModes.tool"; swiftc -typecheck -sdk "$SDK" -target arm64-apple-ios27.2 t3.swift 2>&1 | head -20
-          echo "--- AppIntents framework headers"; ls "$SDK/System/Library/Frameworks/AppIntents.framework" 2>/dev/null || true
-          find "$SDK" -name "*.swiftinterface" -path "*AppIntents*" | head
+          echo "--- pod target ios15.1"
+          swiftc -typecheck -sdk "$SDK" -target arm64-apple-ios15.1 ServiceActivityAttributes.swift 2>&1 | head -20
+          swiftc -typecheck -sdk "$SDK" -target arm64-apple-ios15.1 ServiceActivityAttributes.swift use.swift 2>&1 | head -25
+          echo "--- ios26"
+          swiftc -typecheck -sdk "$SDK" -target arm64-apple-ios26.0 ServiceActivityAttributes.swift use.swift 2>&1 | head -25
