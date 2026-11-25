@@ -124,16 +124,46 @@ jobs:
           OUT="$RUNNER_TEMP/watchprod"
           APP="$OUT/VehicleVaultWatch.app"
           mkdir -p "$APP"
-          xcrun --sdk watchos swiftc \
-            -parse-as-library -O \
-            -target arm64_32-apple-watchos11.0 \
-            -sdk "$(xcrun --sdk watchos --show-sdk-path)" \
-            -o "$APP/VehicleVaultWatch" \
-            "$SRC/VehicleVaultWatchApp.swift"
+          SDKPATH=$(xcrun --sdk watchos --show-sdk-path)
+          for T in arm64_32 arm64; do
+            xcrun --sdk watchos swiftc -parse-as-library -O \
+              -target ${T}-apple-watchos11.0 -sdk "$SDKPATH" \
+              -o "$OUT/bin-$T" "$SRC/VehicleVaultWatchApp.swift"
+          done
+          lipo -create -output "$APP/VehicleVaultWatch" "$OUT/bin-arm64_32" "$OUT/bin-arm64"
+          lipo -info "$APP/VehicleVaultWatch"
+
+          # watchOS 的 app icon 必须来自资源目录，altool 会同时校验 CFBundleIconName 与 bundle 内的图标。
+          ICONSET="$OUT/Assets.xcassets/AppIcon.appiconset"
+          mkdir -p "$ICONSET"
+          sips -z 1024 1024 assets/icon.png --out "$OUT/icon-rgba.png" >/dev/null
+          sips -s format jpeg "$OUT/icon-rgba.png" --out "$OUT/icon.jpg" >/dev/null
+          sips -s format png "$OUT/icon.jpg" --out "$ICONSET/AppIcon-1024.png" >/dev/null
+          cat > "$ICONSET/Contents.json" <<'JSON'
+          {
+            "images" : [
+              {
+                "filename" : "AppIcon-1024.png",
+                "idiom" : "universal",
+                "platform" : "watchos",
+                "size" : "1024x1024"
+              }
+            ],
+            "info" : { "author" : "xcode", "version" : 1 }
+          }
+          JSON
+          xcrun actool --platform watchos --minimum-deployment-target 11.0 \
+            --app-icon AppIcon --output-partial-info-plist "$OUT/watch-partial.plist" \
+            --compile "$APP" "$OUT/Assets.xcassets" \
+            --errors --warnings
+          ls -l "$APP"
+
           python3 .github/scripts/make_watch_bundle.py "$SRC" "$APP" "$WATCH_BUNDLE_ID" \
             "$(node -p "require('./app.json').version")" \
             "$(node -p "require('./app.json').ios.buildNumber")" \
             "$(xcrun --sdk watchos --show-sdk-version)"
+          cat "$OUT/watch-partial.plist" | head -30 || true
+
           codesign --force --sign "Apple Distribution" --keychain build.keychain \
             --identifier "$WATCH_BUNDLE_ID" "$APP"
           codesign -dv "$APP" 2>&1 | grep -Ei 'Identifier|TeamIdentifier' || true
@@ -142,7 +172,6 @@ jobs:
           mkdir -p "$HOST/Watch"
           ditto "$APP" "$HOST/Watch/VehicleVaultWatch.app"
           ls -l "$HOST/Watch/VehicleVaultWatch.app"
-          plutil -p "$HOST/Watch/VehicleVaultWatch.app/Info.plist" | head -20
 
       - name: Archive diagnostics (watch)
         if: failure()
