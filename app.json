@@ -10,7 +10,7 @@
   "ios": {
     "supportsTablet": true,
     "bundleIdentifier": "com.example.vehiclevault",
-    "buildNumber": "8",
+    "buildNumber": "9",
     "appleTeamId": "",
     "infoPlist": {
       "NSCameraUsageDescription": "Take a photo of the dashboard or a service receipt. Photos stay on this device.",
