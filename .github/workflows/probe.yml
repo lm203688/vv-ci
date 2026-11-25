@@ -5,14 +5,39 @@ jobs:
   probe:
     runs-on: xcode-27
     steps:
-      - name: env
+      - name: typecheck new app-intents symbols on 27.2
         run: |
           set -x
-          xcodebuild -version || true
-          sw_vers || true
-          ls /Applications | grep -i xcode || true
-          xcrun --sdk iphoneos --show-sdk-version || true
-          ls /Applications/Xcode*.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs || true
-          ls /Applications/Xcode*.app/Contents/Developer/Platforms/WatchOS.platform/Developer/SDKs || true
-          command -v xcodes || true
-          df -h / | tail -2
+          export DEVELOPER_DIR=/Applications/Xcode_27.2.app
+          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+          echo "SDK=$SDK"
+          mkdir -p /tmp/p && cd /tmp/p
+          cat > t1.swift <<'SW'
+          import AppIntents
+          @available(iOS 27.0, *)
+          struct ProbeTool: ToolIntent {
+            static var title: LocalizedStringResource { "Probe" }
+            static var description: IntentDescription { IntentDescription("probe") }
+            func perform() async throws -> some IntentResult { .result() }
+          }
+          SW
+          echo "--- ToolIntent"; swiftc -typecheck -sdk "$SDK" -target arm64-apple-ios27.2 t1.swift 2>&1 | head -20
+          cat > t2.swift <<'SW'
+          import SwiftUI
+          import AppIntents
+          @available(iOS 27.0, *)
+          func probeCard(_ snippet: CardSnippet) -> some View { snippet }
+          SW
+          echo "--- CardSnippet"; swiftc -typecheck -sdk "$SDK" -target arm64-apple-ios27.2 t2.swift 2>&1 | head -20
+          cat > t3.swift <<'SW'
+          import AppIntents
+          @available(iOS 27.0, *)
+          struct ProbeSkill: AppIntent {
+            static var title: LocalizedStringResource { "Skill probe" }
+            static var supportedModes: IntentModes { [.tool] }
+            func perform() async throws -> some IntentResult { .result() }
+          }
+          SW
+          echo "--- IntentModes.tool"; swiftc -typecheck -sdk "$SDK" -target arm64-apple-ios27.2 t3.swift 2>&1 | head -20
+          echo "--- AppIntents framework headers"; ls "$SDK/System/Library/Frameworks/AppIntents.framework" 2>/dev/null || true
+          find "$SDK" -name "*.swiftinterface" -path "*AppIntents*" | head
