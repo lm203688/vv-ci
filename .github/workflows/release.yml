@@ -133,25 +133,13 @@ jobs:
           lipo -create -output "$APP/VehicleVaultWatch" "$OUT/bin-arm64_32" "$OUT/bin-arm64"
           lipo -info "$APP/VehicleVaultWatch"
 
-          # watchOS 的 app icon 必须来自资源目录，altool 会同时校验 CFBundleIconName 与 bundle 内的图标。
+          # watchOS 的 app icon 必须来自资源目录，且 altool 会逐档校验（缺 24/27.5/29/40/44/50/86/98/108 都拒）。
           ICONSET="$OUT/Assets.xcassets/AppIcon.appiconset"
           mkdir -p "$ICONSET"
           sips -z 1024 1024 assets/icon.png --out "$OUT/icon-rgba.png" >/dev/null
           sips -s format jpeg "$OUT/icon-rgba.png" --out "$OUT/icon.jpg" >/dev/null
-          sips -s format png "$OUT/icon.jpg" --out "$ICONSET/AppIcon-1024.png" >/dev/null
-          cat > "$ICONSET/Contents.json" <<'JSON'
-          {
-            "images" : [
-              {
-                "filename" : "AppIcon-1024.png",
-                "idiom" : "universal",
-                "platform" : "watchos",
-                "size" : "1024x1024"
-              }
-            ],
-            "info" : { "author" : "xcode", "version" : 1 }
-          }
-          JSON
+          sips -s format png "$OUT/icon.jpg" --out "$OUT/icon-base.png" >/dev/null
+          python3 .github/scripts/make_watch_icons.py "$OUT/icon-base.png" "$ICONSET"
           xcrun actool --platform watchos --minimum-deployment-target 11.0 \
             --app-icon AppIcon --output-partial-info-plist "$OUT/watch-partial.plist" \
             --compile "$APP" "$OUT/Assets.xcassets" \
