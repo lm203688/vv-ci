@@ -118,8 +118,6 @@ module.exports = function withWatch(config) {
         PRODUCT_BUNDLE_IDENTIFIER: `"${ids.watchBundle}"`,
         SWIFT_VERSION: '"5.0"',
         SKIP_INSTALL: 'YES',
-        ARCHS: '"arm64_32"',
-        CONFIGURATION_BUILD_DIR: '"$(BUILD_DIR)/$(CONFIGURATION)$(EFFECTIVE_PLATFORM_NAME)"',
         LD_RUNPATH_SEARCH_PATHS: '"$(inherited) @executable_path/Frameworks"',
       });
       if (ids.teamId) bs.DEVELOPMENT_TEAM = `"${ids.teamId}"`;
