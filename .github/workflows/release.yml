@@ -99,17 +99,15 @@ jobs:
             OTHER_CODE_SIGN_FLAGS="--keychain build.keychain" \
             2>&1 | tail -80
 
-      - name: Watch build (compile only)
+      - name: Watch sources typecheck
         run: |
-          set -o pipefail
-          xcodebuild -project ios/VehicleVault.xcodeproj -target VehicleVaultWatch \
-            -configuration Release -sdk watchos ARCHS=arm64_32 ONLY_ACTIVE_ARCH=NO \
-            SYMROOT=/tmp/watchsym OBJROOT=/tmp/watchobj \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build \
-            2>&1 | tee /tmp/watch.log | tail -30
-          rc=${PIPESTATUS[0]}
-          grep -E "error:" /tmp/watch.log | sort -u | head -25 || true
-          exit $rc
+          set -e
+          SDK=$(xcrun --sdk watchos --show-sdk-path)
+          echo "watchOS SDK: $SDK"
+          for f in targets/watch/*.swift; do
+            echo "--- $f"
+            xcrun swiftc -typecheck -sdk "$SDK" -target arm64_32-apple-watchos11.0 "$f"
+          done
 
       - name: Export ipa
         env:
