@@ -118,7 +118,11 @@ module.exports = function withWatch(config) {
       .readdirSync(dstDir)
       .filter((f) => f.endsWith('.swift'))
       .map((f) => `${TARGET_NAME}/${f}`);
-    proj.addBuildPhase(swiftFiles, 'PBXSourcesBuildPhase', 'Sources', targetUuid);
+    // addTarget 已经建好默认的 Sources 阶段；再建一个会让同一个 .swift 编出两份同名产物
+    // （Multiple commands produce ... .app/<exe>），所以只往目标里挂文件。
+    for (const f of swiftFiles) {
+      proj.addSourceFile(f, { target: targetUuid });
+    }
 
     eachBuildSetting(proj, targetUuid, (bs) => {
       Object.assign(bs, {
