@@ -14,6 +14,7 @@ import { exportCsv, exportPdf, exportCsvToFile, exportPdfToFile } from './src/ex
 import { rescheduleAll, countScheduled, hasPermission } from './src/notify';
 import { extract, PROVIDERS } from './src/ai';
 import { getAiConfig, saveAiConfig, clearAiConfig } from './src/secrets';
+import { aiAvailability, askAi } from './src/appleAi';
 import { syncWidget } from './src/widget';
 import { isDemo, runDemo } from './src/demo';
 import FeedbackModal from './src/FeedbackModal';
@@ -457,6 +458,9 @@ function SettingsScreen() {
   const [aiProvider, setAiProvider] = useState('openai');
   const [aiKey, setAiKey] = useState('');
   const [aiSaved, setAiSaved] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiAnswer, setAiAnswer] = useState(null);
+  const [aiStatus, setAiStatus] = useState({ available: false, reason: 'checking' });
   const DEMO = process.env.EXPO_PUBLIC_DEMO === '1';
 
   useEffect(() => {
@@ -469,8 +473,33 @@ function SettingsScreen() {
       setAiKey(ai.key);
       const vs = await listVehicles();
       setVehicle(vs[0] || null);
+      setAiStatus(aiAvailability());
     })();
   }, []);
+
+  // On-device note: the model words what the logbook already knows. Nothing is
+  // uploaded and no key is involved, unlike the photo-extraction path above.
+  const askOnDevice = async () => {
+    if (!vehicle) { Alert.alert('No vehicles yet', 'Add a car first.'); return; }
+    if (!aiStatus.available) { Alert.alert('Apple Intelligence unavailable', 'On this phone: ' + aiStatus.reason + '.'); return; }
+    setAiBusy(true);
+    setAiAnswer(null);
+    try {
+      const items = await listItems(vehicle.id);
+      const facts = items.slice(0, 8)
+        .map((i) => i.name + ' every ' + i.interval_miles + ' ' + units + ' or ' + i.interval_months + ' months')
+        .join('; ');
+      const text = await askAi(
+        'Vehicle ' + vehicle.name + ' shows ' + vehicle.odometer + ' ' + units + '. Scheduled items: ' + (facts || 'none yet') + '. In three short sentences, tell the owner what to do next this month.',
+        'You are the maintenance assistant inside a vehicle logbook app. Use only these figures, never invent a date, a price or a fault, keep it under 60 words, and add no legal or safety claims.'
+      );
+      setAiAnswer(text || 'The on-device model returned no answer just now.');
+    } catch (e) {
+      setAiAnswer('Could not read the logbook: ' + String(e && e.message ? e.message : e));
+    } finally {
+      setAiBusy(false);
+    }
+  };
 
   const saveKey = async () => {
     setBusy(true);
@@ -619,6 +648,19 @@ function SettingsScreen() {
       <PrimaryButton title={busy ? 'Working…' : 'Save key'} onPress={saveKey} disabled={busy} />
       {aiKey ? <PrimaryButton title="Clear key" onPress={clearKey} disabled={busy} /> : null}
       {aiSaved ? <Text style={{ fontSize: t.caption, color: c.accent, marginBottom: s.sm }}>Saved</Text> : null}
+
+      <Text style={{ fontSize: t.caption, fontWeight: '700', color: c.muted, marginTop: s.lg, marginBottom: s.xs }}>On-device AI</Text>
+      <Text style={{ fontSize: t.sub, color: c.muted, lineHeight: 22, marginBottom: s.sm }}>
+        {aiStatus.available
+          ? 'Apple Intelligence is ready here. It writes the next-service note on this phone — no key, no network, nothing uploaded.'
+          : 'Apple Intelligence is not available on this phone (' + aiStatus.reason + '). Everything else still works by hand.'}
+      </Text>
+      <PrimaryButton
+        title={aiBusy ? 'Asking…' : 'Explain my next service'}
+        onPress={askOnDevice}
+        disabled={aiBusy || !aiStatus.available}
+      />
+      {aiAnswer ? <Text style={{ fontSize: t.sub, color: c.text, lineHeight: 22, marginTop: s.sm }}>{aiAnswer}</Text> : null}
 
       <Text style={{ fontSize: t.caption, fontWeight: '700', color: c.muted, marginTop: s.lg, marginBottom: s.xs }}>Export</Text>
       <Text style={{ fontSize: t.sub, color: c.muted, lineHeight: 22, marginBottom: s.sm }}>
